@@ -336,6 +336,17 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
     }
     return value.toString();
   }
+  
+  // Helper: Extract numeric quantity from qtyDisplay (e.g., "2kg" -> "2")
+  String _extractQuantityNumber(String qtyDisplay) {
+    final numericPart = qtyDisplay.replaceAll(RegExp(r'[^0-9.]'), '');
+    return numericPart.isEmpty ? '1' : numericPart;
+  }
+  
+  // Helper: Format rate with unit (e.g., rate=30, unit="plt" -> "₹30/plt")
+  String _formatRateWithUnit(double rate, String unit) {
+    return '₹${_formatNumber(rate)}/${_getShortUnit(unit)}';
+  }
 
   void _toggleEditMode() {
     setState(() {
@@ -429,7 +440,7 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
         children: [
           // --- TOP SECTION: LIVE BILL ---
           Expanded(
-            flex: 4,
+            flex: _isEditMode ? 5 : 4,
             child: Container(
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -491,6 +502,43 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                       ],
                     ),
                   ),
+                  
+                  // Column Headers
+                  const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                      child: Row(children: [
+                        Expanded(
+                            flex: 4,
+                            child: Text("Item",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Colors.grey))),
+                        Expanded(
+                            flex: 1,
+                            child: Text("Qty",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Colors.grey))),
+                        Expanded(
+                            flex: 3,
+                            child: Text("Rate",
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Colors.grey))),
+                        Expanded(
+                            flex: 2,
+                            child: Text("Total",
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Colors.grey))),
+                      ])),
                   const Divider(height: 1),
                   Expanded(
                     child: _currentBill.isEmpty
@@ -541,11 +589,15 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                               final item = _currentBill[index];
                               
                               if (_isEditMode) {
-                                // Editable Mode
+                                // Editable Mode - 4 Column Layout
                                 return Row(
                                   children: [
                                     GestureDetector(
-                                      onTap: () => _reduceItem(item),
+                                      onTap: () {
+                                        setState(() {
+                                          _currentBill.removeAt(index);
+                                        });
+                                      },
                                       child: Container(
                                         margin: const EdgeInsets.only(right: 8),
                                         padding: const EdgeInsets.all(2),
@@ -558,9 +610,8 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                                     ),
                                     Expanded(
                                       flex: 4,
-                                      child: TextField(
-                                        controller: TextEditingController(text: item.name)
-                                          ..selection = TextSelection.collapsed(offset: item.name.length),
+                                      child: TextFormField(
+                                        initialValue: item.name,
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 14),
@@ -574,18 +625,40 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                                     ),
                                     const SizedBox(width: 4),
                                     Expanded(
-                                      flex: 2,
-                                      child: TextField(
-                                        controller: TextEditingController(text: item.qtyDisplay)
-                                          ..selection = TextSelection.collapsed(offset: item.qtyDisplay.length),
+                                      flex: 1,
+                                      child: TextFormField(
+                                        initialValue: _extractQuantityNumber(item.qtyDisplay),
                                         textAlign: TextAlign.center,
+                                        keyboardType: TextInputType.number,
                                         style: const TextStyle(fontSize: 13),
                                         decoration: const InputDecoration(
                                           isDense: true,
                                           contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                                           border: OutlineInputBorder(),
                                         ),
-                                        onChanged: (value) => _updateBillItem(index, 'qtyDisplay', value),
+                                        onChanged: (value) {
+                                          // Update quantity keeping the unit
+                                          final newQtyDisplay = '$value${_getShortUnit(item.unit)}';
+                                          _updateBillItem(index, 'qtyDisplay', newQtyDisplay);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      flex: 3,
+                                      child: TextFormField(
+                                        initialValue: _formatNumber(item.rate),
+                                        textAlign: TextAlign.right,
+                                        keyboardType: TextInputType.number,
+                                        style: const TextStyle(fontSize: 11),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                          border: const OutlineInputBorder(),
+                                          prefixText: '₹',
+                                          suffixText: '/${_getShortUnit(item.unit)}',
+                                        ),
+                                        onChanged: (value) => _updateBillItem(index, 'rate', value),
                                       ),
                                     ),
                                     const SizedBox(width: 4),
@@ -600,7 +673,7 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                                   ],
                                 );
                               } else {
-                                // Display Mode
+                                // Display Mode - 4 Column Layout
                                 return Row(
                                   children: [
                                     GestureDetector(
@@ -623,10 +696,16 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                                               fontSize: 14)),
                                     ),
                                     Expanded(
-                                      flex: 2,
-                                      child: Text(item.qtyDisplay,
+                                      flex: 1,
+                                      child: Text(_extractQuantityNumber(item.qtyDisplay),
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(fontSize: 13)),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(_formatRateWithUnit(item.rate, item.unit),
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(fontSize: 12)),
                                     ),
                                     Expanded(
                                       flex: 2,
@@ -695,8 +774,9 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
           ),
 
           // --- BOTTOM SECTION: GRID ---
-          Expanded(
-            flex: 3,
+          if (!_isEditMode)
+            Expanded(
+              flex: 3,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: GridView.builder(

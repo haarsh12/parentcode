@@ -255,6 +255,24 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
     }
     return value.toString();
   }
+  
+  // Helper: Extract numeric quantity from qtyDisplay (e.g., "2kg" -> "2")
+  String _extractQuantityNumber(String qtyDisplay) {
+    final numericPart = qtyDisplay.replaceAll(RegExp(r'[^0-9.]'), '');
+    return numericPart.isEmpty ? '1' : numericPart;
+  }
+  
+  // Helper: Extract unit from qtyDisplay (e.g., "2kg" -> "kg")
+  String _extractUnit(String qtyDisplay) {
+    final unitPart = qtyDisplay.replaceAll(RegExp(r'[0-9.]'), '').trim();
+    return unitPart.isEmpty ? 'kg' : unitPart;
+  }
+  
+  // Helper: Format rate with unit (e.g., rate=30, qtyDisplay="2plt" -> "₹30/plt")
+  String _formatRateWithUnit(double rate, String qtyDisplay) {
+    final unit = _extractUnit(qtyDisplay);
+    return '₹${_formatNumber(rate)}/$unit';
+  }
 
   // Helper: Format quantity display with smart kg/gm conversion
   String _formatQuantityDisplay(String qtyDisplay) {
@@ -364,23 +382,26 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
     items[index] = item;
     billProvider.updateBillItems(items);
   }
+  
+  // Computed total - always derived from items
+  double _computeTotal(List<Map<String, dynamic>> items) {
+    return items.fold<double>(
+      0,
+      (sum, item) => sum + ((item['total'] as num?)?.toDouble() ?? 0),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<BillProvider>(
       builder: (context, billProvider, child) {
         final currentBill = billProvider.currentBillItems;
+        final grandTotal = _computeTotal(currentBill);
         
         return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
-            ),
-            child: IntrinsicHeight(
-              child: Column(
+        child: Column(
           children: [
             // 1. Header
             Padding(
@@ -401,8 +422,9 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                   ]),
             ),
 
-            // 2. Mic Animation
-            Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            // 2. Mic Animation (hide when in edit mode)
+            if (!_isEditMode)
+              Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               GestureDetector(
                   onTap: _toggleListening,
                   child: AnimatedBuilder(
@@ -467,10 +489,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
             // 3. Live Bill Container
             Expanded(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-                padding: EdgeInsets.only(
-                  bottom: _isEditMode ? MediaQuery.of(context).viewInsets.bottom : 0,
-                ),
+                margin: EdgeInsets.fromLTRB(16, _isEditMode ? 10 : 20, 16, 16),
                 decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
@@ -554,8 +573,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                                       fontSize: 12,
                                       color: Colors.grey))),
                           Expanded(
-                              flex: 2,
-                              child: Text("Price",
+                              flex: 3,
+                              child: Text("Rate",
                                   textAlign: TextAlign.right,
                                   style: TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -653,32 +672,37 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                                       const SizedBox(width: 4),
                                       Expanded(
                                           flex: 1,
-                                          child: TextField(
-                                            controller: TextEditingController(text: item['qty_display'])
-                                              ..selection = TextSelection.collapsed(offset: item['qty_display'].length),
+                                          child: TextFormField(
+                                            initialValue: _extractQuantityNumber(item['qty_display']),
                                             textAlign: TextAlign.center,
+                                            keyboardType: TextInputType.number,
                                             style: const TextStyle(fontSize: 13),
                                             decoration: const InputDecoration(
                                               isDense: true,
                                               contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                                               border: OutlineInputBorder(),
                                             ),
-                                            onChanged: (value) => _updateBillItem(index, 'qty_display', value, billProvider),
+                                            onChanged: (value) {
+                                              // Update quantity keeping the unit
+                                              final unit = _extractUnit(item['qty_display']);
+                                              final newQtyDisplay = '$value$unit';
+                                              _updateBillItem(index, 'qty_display', newQtyDisplay, billProvider);
+                                            },
                                           )),
                                       const SizedBox(width: 4),
                                       Expanded(
-                                          flex: 2,
-                                          child: TextField(
-                                            controller: TextEditingController(text: _formatNumber((item['rate'] as num).toDouble()))
-                                              ..selection = TextSelection.collapsed(offset: _formatNumber((item['rate'] as num).toDouble()).length),
+                                          flex: 3,
+                                          child: TextFormField(
+                                            initialValue: _formatNumber((item['rate'] as num).toDouble()),
                                             textAlign: TextAlign.right,
                                             keyboardType: TextInputType.number,
-                                            style: const TextStyle(fontSize: 12),
-                                            decoration: const InputDecoration(
+                                            style: const TextStyle(fontSize: 11),
+                                            decoration: InputDecoration(
                                               isDense: true,
-                                              contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                              border: OutlineInputBorder(),
+                                              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                              border: const OutlineInputBorder(),
                                               prefixText: '₹',
+                                              suffixText: '/${_extractUnit(item['qty_display'])}',
                                             ),
                                             onChanged: (value) => _updateBillItem(index, 'rate', value, billProvider),
                                           )),
@@ -693,44 +717,47 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                                     ]);
                                   } else {
                                     // Display Mode
-                                    return Row(children: [
-                                      GestureDetector(
-                                          onTap: () => billProvider.removeBillItem(index),
-                                          child: Container(
-                                              margin:
-                                                  const EdgeInsets.only(right: 8),
-                                              padding: const EdgeInsets.all(2),
-                                              decoration: BoxDecoration(
-                                                  color: Colors.red[50],
-                                                  shape: BoxShape.circle),
-                                              child: const Icon(Icons.remove,
-                                                  size: 16, color: Colors.red))),
-                                      Expanded(
-                                          flex: 4,
-                                          child: Text(item['name'],
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 14))),
-                                      Expanded(
-                                          flex: 1,
-                                          child: Text(_formatQuantityDisplay(item['qty_display']),
-                                              textAlign: TextAlign.center,
-                                              style:
-                                                  const TextStyle(fontSize: 13))),
-                                      Expanded(
-                                          flex: 2,
-                                          child: Text("₹${_formatNumber((item['rate'] as num).toDouble())}",
-                                              textAlign: TextAlign.right,
-                                              style:
-                                                  const TextStyle(fontSize: 12))),
-                                      Expanded(
-                                          flex: 2,
-                                          child: Text("₹${_formatNumber((item['total'] as num).toDouble())}",
-                                              textAlign: TextAlign.right,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 14))),
-                                    ]);
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      child: Row(children: [
+                                        GestureDetector(
+                                            onTap: () => billProvider.removeBillItem(index),
+                                            child: Container(
+                                                margin:
+                                                    const EdgeInsets.only(right: 8),
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                    color: Colors.red[50],
+                                                    shape: BoxShape.circle),
+                                                child: const Icon(Icons.remove,
+                                                    size: 16, color: Colors.red))),
+                                        Expanded(
+                                            flex: 4,
+                                            child: Text(item['name'],
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14))),
+                                        Expanded(
+                                            flex: 1,
+                                            child: Text(_extractQuantityNumber(item['qty_display']),
+                                                textAlign: TextAlign.center,
+                                                style:
+                                                    const TextStyle(fontSize: 13))),
+                                        Expanded(
+                                            flex: 3,
+                                            child: Text(_formatRateWithUnit((item['rate'] as num).toDouble(), item['qty_display']),
+                                                textAlign: TextAlign.right,
+                                                style:
+                                                    const TextStyle(fontSize: 11))),
+                                        Expanded(
+                                            flex: 2,
+                                            child: Text("₹${_formatNumber((item['total'] as num).toDouble())}",
+                                                textAlign: TextAlign.right,
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14))),
+                                      ]),
+                                    );
                                   }
                                 })),
 
@@ -776,9 +803,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
               ),
             ),
           ],
-        ),
-            ),
-          ),
         ),
       ),
     );
