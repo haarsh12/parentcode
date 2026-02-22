@@ -1,0 +1,596 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../core/theme.dart';
+import '../models/item.dart';
+import '../models/shop_details.dart';
+import '../providers/bill_provider.dart';
+
+// Helper model for the bill calculation
+class BillItem {
+  final String name;
+  final String qtyDisplay;
+  final double rate;
+  final double total;
+  final String unit;
+
+  BillItem({
+    required this.name,
+    required this.qtyDisplay,
+    required this.rate,
+    required this.total,
+    required this.unit,
+  });
+}
+
+class FrequentBillingScreen extends StatefulWidget {
+  final List<Item> frequentItems;
+  final ShopDetails shopDetails;
+  final Function(Map<String, dynamic>) onBillFinalized;
+  final Function(Item) onAdd;
+  final Function(Item) onEdit;
+  final Function(String) onDelete;
+  final bool isPrinterConnected;
+  final VoidCallback togglePrinter;
+
+  const FrequentBillingScreen({
+    super.key,
+    required this.frequentItems,
+    required this.shopDetails,
+    required this.onBillFinalized,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+    required this.isPrinterConnected,
+    required this.togglePrinter,
+  });
+
+  @override
+  State<FrequentBillingScreen> createState() => _FrequentBillingScreenState();
+}
+
+class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
+  final List<BillItem> _currentBill = [];
+  final Map<String, int> _itemCounts = {};
+
+  // Standard units for the dropdown
+  final List<String> _unitOptions = ['kg', 'pics', 'dozen', 'plate', 'other'];
+
+  void _handleItemTap(Item item) {
+    setState(() {
+      int currentCount = _itemCounts[item.id] ?? 0;
+      int newCount = currentCount + 1;
+      _itemCounts[item.id] = newCount;
+
+      int billIndex = _currentBill.indexWhere((b) => b.name == item.names[0]);
+      if (billIndex != -1) {
+        // Update existing item
+        BillItem oldBillItem = _currentBill[billIndex];
+        _currentBill[billIndex] = BillItem(
+          name: oldBillItem.name,
+          qtyDisplay: "$newCount${_getShortUnit(item.unit)}",
+          rate: item.price,
+          total: item.price * newCount,
+          unit: item.unit,
+        );
+      } else {
+        // Add new item
+        _currentBill.add(BillItem(
+          name: item.names[0],
+          qtyDisplay: "1${_getShortUnit(item.unit)}",
+          rate: item.price,
+          total: item.price,
+          unit: item.unit,
+        ));
+      }
+    });
+  }
+
+  void _reduceItem(BillItem billItem) {
+    setState(() {
+      Item? item = widget.frequentItems.firstWhere(
+        (i) => i.names[0] == billItem.name,
+        orElse: () => Item(id: '', names: [], price: 0, unit: '', category: ''),
+      );
+      if (item.id.isEmpty) return;
+
+      int currentCount = _itemCounts[item.id] ?? 0;
+      if (currentCount > 0) {
+        int newCount = currentCount - 1;
+        _itemCounts[item.id] = newCount;
+        int billIndex = _currentBill.indexOf(billItem);
+
+        if (newCount == 0) {
+          _currentBill.removeAt(billIndex);
+          _itemCounts.remove(item.id);
+        } else {
+          _currentBill[billIndex] = BillItem(
+            name: billItem.name,
+            qtyDisplay: "$newCount${_getShortUnit(item.unit)}",
+            rate: item.price,
+            total: item.price * newCount,
+            unit: item.unit,
+          );
+        }
+      }
+    });
+  }
+
+  void _resetBill() {
+    setState(() {
+      _currentBill.clear();
+      _itemCounts.clear();
+    });
+  }
+
+  void _finalizeBill() async {
+    // 1. Check Printer Connection
+    if (!widget.isPrinterConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("⚠️ Connect Printer First!",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    if (_currentBill.isEmpty) return;
+
+    // Get next bill number from BillProvider
+    final billProvider = Provider.of<BillProvider>(context, listen: false);
+    final billNumber = await billProvider.getNextBillNumber();
+
+    final billData = {
+      'id': billNumber,
+      'date': DateFormat('dd-MM-yyyy').format(DateTime.now()),
+      'time': DateFormat('hh:mm:ss a').format(DateTime.now()),
+      'total': _currentBill.fold<double>(0, (sum, item) => sum + item.total),
+      'shopName': widget.shopDetails.shopName,
+      'shopAddress': widget.shopDetails.address,
+      'shopPhone': widget.shopDetails.phone1,
+      'items': _currentBill
+          .map((e) => {
+                'en': e.name,
+                'hi': e.name,
+                'name': e.name,
+                'qty': e.qtyDisplay.replaceAll(RegExp(r'[a-zA-Z]'), '').trim(),
+                'qty_display': e.qtyDisplay,
+                'rate': e.rate,
+                'total': e.total,
+                'unit': e.unit,
+              })
+          .toList(),
+    };
+
+    widget.onBillFinalized(billData);
+    _resetBill();
+  }
+
+  void _showFrequentItemDialog({Item? item}) {
+    final bool isEdit = item != null;
+
+    final idController = TextEditingController(
+        text: isEdit ? item.id : 'FB-${DateTime.now().millisecondsSinceEpoch}');
+    final nameController = TextEditingController(
+        text: isEdit && item.names.isNotEmpty ? item.names[0] : '');
+    final priceController =
+        TextEditingController(text: isEdit ? item.price.toString() : '');
+
+    // Unit Logic
+    String currentUnitSelection = 'plate'; // Default
+    final customUnitController = TextEditingController();
+
+    if (isEdit) {
+      if (_unitOptions.contains(item.unit)) {
+        currentUnitSelection = item.unit;
+      } else {
+        currentUnitSelection = 'other';
+        customUnitController.text = item.unit;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(isEdit ? "Edit Item" : "Add Frequent Item"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: "Item Name"),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: TextField(
+                        controller: priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Price"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        value: currentUnitSelection,
+                        decoration: const InputDecoration(labelText: "Unit"),
+                        isExpanded: true,
+                        items: _unitOptions.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (newValue) {
+                          setDialogState(() {
+                            currentUnitSelection = newValue!;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                // Show custom text field if 'other' is selected
+                if (currentUnitSelection == 'other') ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: customUnitController,
+                    decoration: const InputDecoration(
+                      labelText: "Type Unit Name manually",
+                      hintText: "e.g. bundle, glass",
+                    ),
+                  ),
+                ],
+
+                // Delete Button (Only in Edit Mode)
+                if (isEdit) ...[
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        widget.onDelete(item.id);
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      label: const Text("DELETE ITEM",
+                          style: TextStyle(color: Colors.red)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (nameController.text.isNotEmpty &&
+                      priceController.text.isNotEmpty) {
+                    // Determine final unit string
+                    String finalUnit = currentUnitSelection;
+                    if (currentUnitSelection == 'other') {
+                      finalUnit = customUnitController.text.trim();
+                      if (finalUnit.isEmpty) finalUnit = 'unit'; // Fallback
+                    }
+
+                    final newItem = Item(
+                      id: idController.text,
+                      names: [nameController.text],
+                      price: double.tryParse(priceController.text) ?? 0,
+                      unit: finalUnit,
+                      category: 'Frequent',
+                    );
+
+                    isEdit ? widget.onEdit(newItem) : widget.onAdd(newItem);
+                    Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text("Save"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // Helper: Get short unit names
+  String _getShortUnit(String unit) {
+    final unitMap = {
+      'dozen': 'doz',
+      'plate': 'plt',
+      'pieces': 'pic',
+      'pics': 'pic',
+      'litre': 'lit',
+      'liter': 'lit',
+    };
+    return unitMap[unit.toLowerCase()] ?? unit;
+  }
+
+  // Helper: Format number without .0 for whole numbers
+  String _formatNumber(double value) {
+    if (value == value.toInt()) {
+      return value.toInt().toString();
+    }
+    return value.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Frequent Billing"),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.print,
+                color: widget.isPrinterConnected
+                    ? AppColors.printerConnected
+                    : AppColors.printerDisconnected),
+            onPressed: widget.togglePrinter,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: () => _showFrequentItemDialog(),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // --- TOP SECTION: LIVE BILL ---
+          Expanded(
+            flex: 4,
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  )
+                ],
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Live Bill",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        TextButton.icon(
+                          onPressed: _currentBill.isEmpty ? null : _resetBill,
+                          icon: const Icon(Icons.cancel_outlined,
+                              size: 18, color: Colors.red),
+                          label: const Text("Cancel Bill",
+                              style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: _currentBill.isEmpty
+                        ? const Center(
+                            child: Text("Tap items below to add",
+                                style: TextStyle(color: Colors.grey)))
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            itemCount: _currentBill.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 16),
+                            itemBuilder: (context, index) {
+                              final item = _currentBill[index];
+                              return Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => _reduceItem(item),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(right: 8),
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                          color: Colors.red[50],
+                                          shape: BoxShape.circle),
+                                      child: const Icon(Icons.remove,
+                                          size: 16, color: Colors.red),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 4,
+                                    child: Text(item.name,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14)),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(item.qtyDisplay,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(fontSize: 13)),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text("₹${_formatNumber(item.total)}",
+                                        textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14)),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(25)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed:
+                              _finalizeBill, // Printer check is inside here
+                          icon: const Icon(Icons.print,
+                              color: Colors.white, size: 20),
+                          label: const Text("PRINT",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.textBlack,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 25, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30)),
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text("TOTAL",
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.bold)),
+                            Text(
+                              "₹${_formatNumber(_currentBill.fold<double>(0, (sum, item) => sum + item.total))}",
+                              style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textBlack),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // --- BOTTOM SECTION: GRID ---
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.builder(
+                padding: const EdgeInsets.only(bottom: 20),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.5,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: widget.frequentItems.length,
+                itemBuilder: (context, index) {
+                  final item = widget.frequentItems[index];
+                  final count = _itemCounts[item.id] ?? 0;
+                  final isSelected = count > 0;
+                  return GestureDetector(
+                    onTap: () => _handleItemTap(item),
+                    // FIXED: Long press opens Edit Dialog (was deleting)
+                    onLongPress: () => _showFrequentItemDialog(item: item),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primaryGreen
+                              : Colors.grey.shade200,
+                          width: isSelected ? 2 : 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isSelected
+                                ? AppColors.primaryGreen.withOpacity(0.2)
+                                : Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(item.names[0],
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textBlack)),
+                                const SizedBox(height: 5),
+                                Text("₹${_formatNumber(item.price)} / ${_getShortUnit(item.unit)}",
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.textGrey)),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                width: double.infinity,
+                                height: double.infinity,
+                                color: AppColors.primaryGreen.withOpacity(0.3),
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.4),
+                                        shape: BoxShape.circle),
+                                    child: Text(count.toString(),
+                                        style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.primaryGreen)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
