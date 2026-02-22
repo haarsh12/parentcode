@@ -52,6 +52,9 @@ class FrequentBillingScreen extends StatefulWidget {
 class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
   final List<BillItem> _currentBill = [];
   final Map<String, int> _itemCounts = {};
+  
+  // Edit Mode State
+  bool _isEditMode = false;
 
   // Standard units for the dropdown
   final List<String> _unitOptions = ['kg', 'pics', 'dozen', 'plate', 'other'];
@@ -120,6 +123,9 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
     setState(() {
       _currentBill.clear();
       _itemCounts.clear();
+      if (_isEditMode) {
+        _toggleEditMode();
+      }
     });
   }
 
@@ -331,9 +337,78 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
     return value.toString();
   }
 
+  void _toggleEditMode() {
+    setState(() {
+      _isEditMode = !_isEditMode;
+    });
+    if (!_isEditMode) {
+      // Close keyboard when exiting edit mode
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  void _addManualItem() {
+    setState(() {
+      _currentBill.add(BillItem(
+        name: 'New Item',
+        qtyDisplay: '1kg',
+        rate: 0.0,
+        total: 0.0,
+        unit: 'kg',
+      ));
+      
+      if (!_isEditMode) {
+        _isEditMode = true;
+      }
+    });
+  }
+
+  void _updateBillItem(int index, String field, String value) {
+    setState(() {
+      BillItem oldItem = _currentBill[index];
+      
+      if (field == 'name') {
+        _currentBill[index] = BillItem(
+          name: value,
+          qtyDisplay: oldItem.qtyDisplay,
+          rate: oldItem.rate,
+          total: oldItem.total,
+          unit: oldItem.unit,
+        );
+      } else if (field == 'qtyDisplay') {
+        // Extract numeric part
+        final numericQty = value.replaceAll(RegExp(r'[^0-9.]'), '');
+        final qty = double.tryParse(numericQty) ?? 1.0;
+        final newTotal = oldItem.rate * qty;
+        
+        _currentBill[index] = BillItem(
+          name: oldItem.name,
+          qtyDisplay: value,
+          rate: oldItem.rate,
+          total: newTotal,
+          unit: oldItem.unit,
+        );
+      } else if (field == 'rate') {
+        final newRate = double.tryParse(value) ?? 0.0;
+        final qtyStr = oldItem.qtyDisplay.replaceAll(RegExp(r'[^0-9.]'), '');
+        final qty = double.tryParse(qtyStr) ?? 1.0;
+        final newTotal = newRate * qty;
+        
+        _currentBill[index] = BillItem(
+          name: oldItem.name,
+          qtyDisplay: oldItem.qtyDisplay,
+          rate: newRate,
+          total: newTotal,
+          unit: oldItem.unit,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text("Frequent Billing"),
         actions: [
@@ -378,14 +453,40 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                         const Text("Live Bill",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 16)),
-                        TextButton.icon(
-                          onPressed: _currentBill.isEmpty ? null : _resetBill,
-                          icon: const Icon(Icons.cancel_outlined,
-                              size: 18, color: Colors.red),
-                          label: const Text("Cancel Bill",
-                              style: TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            TextButton.icon(
+                              onPressed: _currentBill.isEmpty ? null : _resetBill,
+                              icon: const Icon(Icons.cancel_outlined,
+                                  size: 18, color: Colors.red),
+                              label: const Text("Cancel Bill",
+                                  style: TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () {
+                                if (_currentBill.isEmpty) {
+                                  // Manual Add Mode
+                                  _addManualItem();
+                                } else {
+                                  _toggleEditMode();
+                                }
+                              },
+                              icon: Icon(
+                                _currentBill.isEmpty 
+                                  ? Icons.add 
+                                  : (_isEditMode ? Icons.close : Icons.edit),
+                                size: 20,
+                                color: AppColors.primaryGreen,
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: AppColors.primaryGreen.withOpacity(0.1),
+                                padding: const EdgeInsets.all(8),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -394,53 +495,150 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                   Expanded(
                     child: _currentBill.isEmpty
                         ? const Center(
-                            child: Text("Tap items below to add",
+                            child: Text("Tap + to add items manually\nor tap items below",
+                                textAlign: TextAlign.center,
                                 style: TextStyle(color: Colors.grey)))
                         : ListView.separated(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 10),
-                            itemCount: _currentBill.length,
+                            itemCount: _currentBill.length + (_isEditMode ? 1 : 0),
                             separatorBuilder: (_, __) =>
                                 const Divider(height: 16),
                             itemBuilder: (context, index) {
-                              final item = _currentBill[index];
-                              return Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => _reduceItem(item),
-                                    child: Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: BoxDecoration(
-                                          color: Colors.red[50],
-                                          shape: BoxShape.circle),
-                                      child: const Icon(Icons.remove,
-                                          size: 16, color: Colors.red),
+                              // Add Item Button at the end in Edit Mode
+                              if (_isEditMode && index == _currentBill.length) {
+                                return GestureDetector(
+                                  onTap: _addManualItem,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryGreen.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: AppColors.primaryGreen.withOpacity(0.3),
+                                        style: BorderStyle.solid,
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.add, color: AppColors.primaryGreen, size: 20),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          "Add Item",
+                                          style: TextStyle(
+                                            color: AppColors.primaryGreen,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Expanded(
-                                    flex: 4,
-                                    child: Text(item.name,
+                                );
+                              }
+                              
+                              final item = _currentBill[index];
+                              
+                              if (_isEditMode) {
+                                // Editable Mode
+                                return Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _reduceItem(item),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                            color: Colors.red[50],
+                                            shape: BoxShape.circle),
+                                        child: const Icon(Icons.remove,
+                                            size: 16, color: Colors.red),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 4,
+                                      child: TextField(
+                                        controller: TextEditingController(text: item.name)
+                                          ..selection = TextSelection.collapsed(offset: item.name.length),
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w600,
-                                            fontSize: 14)),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(item.qtyDisplay,
+                                            fontSize: 14),
+                                        decoration: const InputDecoration(
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        onChanged: (value) => _updateBillItem(index, 'name', value),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      flex: 2,
+                                      child: TextField(
+                                        controller: TextEditingController(text: item.qtyDisplay)
+                                          ..selection = TextSelection.collapsed(offset: item.qtyDisplay.length),
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(fontSize: 13)),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text("₹${_formatNumber(item.total)}",
-                                        textAlign: TextAlign.right,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14)),
-                                  ),
-                                ],
-                              );
+                                        style: const TextStyle(fontSize: 13),
+                                        decoration: const InputDecoration(
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        onChanged: (value) => _updateBillItem(index, 'qtyDisplay', value),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text("₹${_formatNumber(item.total)}",
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14)),
+                                    ),
+                                  ],
+                                );
+                              } else {
+                                // Display Mode
+                                return Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _reduceItem(item),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                            color: Colors.red[50],
+                                            shape: BoxShape.circle),
+                                        child: const Icon(Icons.remove,
+                                            size: 16, color: Colors.red),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 4,
+                                      child: Text(item.name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14)),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(item.qtyDisplay,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(fontSize: 13)),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text("₹${_formatNumber(item.total)}",
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14)),
+                                    ),
+                                  ],
+                                );
+                              }
                             },
                           ),
                   ),

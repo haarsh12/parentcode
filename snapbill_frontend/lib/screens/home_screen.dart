@@ -204,6 +204,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- CORE BILLING LOGIC (Modified) ---
   void _printOrSaveBill(Map<String, dynamic> billData) async {
+    debugPrint("🏠 HOME SCREEN: Received bill data");
+    debugPrint("🏠 Items in billData: ${billData['items']}");
+    debugPrint("🏠 Items count: ${(billData['items'] as List?)?.length ?? 0}");
+    
     // 1. Check Printer Connection FIRST
     if (_isPrinterConnected) {
       // Get Shop Details
@@ -219,6 +223,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // Get QR Code Path from BillProvider
       final billProvider = Provider.of<BillProvider>(context, listen: false);
       final qrCodePath = billProvider.qrCodePath;
+
+      debugPrint("🏠 Calling printer service...");
 
       // Use the new Service with QR code
       String result = await _printerService.printBill(billData, shopDetails, qrCodePath);

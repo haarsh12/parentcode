@@ -47,7 +47,7 @@ class AIService:
         inventory_json = json.dumps(inventory_list, ensure_ascii=False)
 
         prompt = f"""
-        You are a custom AI for "SnapBill". Answer ONLY in Hindi (Devanagari Script).
+        You are a custom AI for "SnapBill". Answer ONLY in Hindi in Latin Script  (Hinglish).
         
         INVENTORY (Only items with configured prices): {inventory_json}
         USER SAID: "{user_text}"
