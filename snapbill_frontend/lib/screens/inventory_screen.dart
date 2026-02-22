@@ -8,7 +8,7 @@ class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  State<InventoryScreen> createState() =>  _InventoryScreenState();
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
