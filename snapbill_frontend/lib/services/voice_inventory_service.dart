@@ -21,6 +21,8 @@ class VoiceInventoryService {
             unit: itemData['unit'] ?? 'kg',
             isExisting: itemData['is_existing'] ?? false,
             oldPrice: itemData['old_price']?.toDouble(),
+            oldUnit: itemData['old_unit'],
+            existingId: itemData['existing_id'],
             aliases: List<String>.from(itemData['aliases'] ?? []),
           );
         }).toList();

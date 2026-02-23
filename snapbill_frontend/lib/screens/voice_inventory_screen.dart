@@ -161,6 +161,8 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
         unit: 'kg',
         isExisting: false,
         oldPrice: null,
+        oldUnit: null,
+        existingId: null,
         aliases: [],
       ));
     });
@@ -182,23 +184,18 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
     
     for (var category in _parsedCategories) {
       for (var item in category.items) {
-        // Skip existing items (they're just for reference)
-        if (item.isExisting) continue;
+        // Skip OLD reference items (they're just for comparison)
+        if (item.isExisting && item.existingId == null) continue;
         
         // Validate item
         if (item.name.isEmpty || item.price <= 0) continue;
         
-        // Find if this item already exists in inventory (case-insensitive name match)
-        final existingItem = provider.items.firstWhere(
-          (i) => i.names.any((name) => name.toLowerCase().trim() == item.name.toLowerCase().trim()),
-          orElse: () => Item(id: '', names: [], price: 0, unit: '', category: ''),
-        );
-        
-        final isUpdate = existingItem.id.isNotEmpty;
+        // Use existingId from backend if available (this means it's an update)
+        final isUpdate = item.existingId != null && item.existingId!.isNotEmpty;
         
         // Create item with existing ID if found (this will trigger update in backend)
         final newItem = Item(
-          id: isUpdate ? existingItem.id : 'custom_${DateTime.now().millisecondsSinceEpoch}_${item.name.toLowerCase().replaceAll(' ', '_')}',
+          id: isUpdate ? item.existingId! : 'custom_${DateTime.now().millisecondsSinceEpoch}_${item.name.toLowerCase().replaceAll(' ', '_')}',
           names: [item.name, ...item.aliases],
           price: item.price,
           unit: item.unit,
@@ -206,7 +203,7 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
         );
         
         print('💾 Saving item: ${newItem.id} - ${newItem.names[0]} - ₹${newItem.price}');
-        print('   Is update: $isUpdate');
+        print('   Is update: $isUpdate (existingId: ${item.existingId})');
         
         await provider.addItem(newItem);
         
@@ -503,7 +500,7 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
               children: [
                 Expanded(
                   child: Text(
-                    '${item.name} - ₹${item.oldPrice}/${item.unit}',
+                    '${item.name} - ₹${item.oldPrice}/${item.oldUnit ?? item.unit}',
                     style: const TextStyle(
                       color: Colors.grey,
                       decoration: TextDecoration.lineThrough,
@@ -654,6 +651,8 @@ class ParsedItem {
   String unit;
   bool isExisting;
   double? oldPrice;
+  String? oldUnit;
+  String? existingId;
   List<String> aliases;
 
   ParsedItem({
@@ -662,6 +661,8 @@ class ParsedItem {
     required this.unit,
     required this.isExisting,
     this.oldPrice,
+    this.oldUnit,
+    this.existingId,
     required this.aliases,
   });
 }

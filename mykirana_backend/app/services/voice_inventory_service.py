@@ -119,7 +119,7 @@ Return ONLY valid JSON. No explanation."""
                 print(f"   Attempted to parse: {result_text[:500]}")
                 raise
             
-            # Post-process: Normalize category names
+            # Post-process: Normalize category names and check for existing items
             if 'categories' in parsed_data:
                 for category in parsed_data['categories']:
                     if 'name' in category:
@@ -127,6 +127,11 @@ Return ONLY valid JSON. No explanation."""
                             category['name'],
                             existing_categories
                         )
+                    
+                    # Check each item against existing inventory
+                    if 'items' in category:
+                        for item in category['items']:
+                            _mark_existing_item(item, existing_items)
             
             print(f"✅ Parsed voice inventory: {len(parsed_data.get('categories', []))} categories")
             
@@ -134,7 +139,8 @@ Return ONLY valid JSON. No explanation."""
             for cat in parsed_data.get('categories', []):
                 print(f"   Category: {cat.get('name')}")
                 for item in cat.get('items', []):
-                    print(f"      - {item.get('name')}: ₹{item.get('price')}/{item.get('unit')}")
+                    existing_marker = " (EXISTING)" if item.get('is_existing') else " (NEW)"
+                    print(f"      - {item.get('name')}: ₹{item.get('price')}/{item.get('unit')}{existing_marker}")
             
             return parsed_data
             
@@ -162,6 +168,38 @@ Return ONLY valid JSON. No explanation."""
         "raw_text": raw_text,
         "error": last_error
     }
+
+
+def _mark_existing_item(item: Dict[str, Any], existing_items: List[Dict[str, Any]]) -> None:
+    """
+    Check if item exists in inventory and mark it with old price
+    Modifies item dict in-place
+    
+    Args:
+        item: Parsed item dict from AI
+        existing_items: List of existing inventory items
+    """
+    item_name = item.get('name', '').lower().strip()
+    
+    # Search for matching item (case-insensitive name match)
+    for existing in existing_items:
+        existing_names = existing.get('names', [])
+        
+        # Check if any name matches
+        for existing_name in existing_names:
+            if existing_name.lower().strip() == item_name:
+                # Found match - mark as existing and store old price
+                item['is_existing'] = True
+                item['old_price'] = existing.get('price', 0)
+                item['old_unit'] = existing.get('unit', 'kg')
+                item['existing_id'] = existing.get('id', '')
+                
+                print(f"   🔍 Found existing item: {item_name} (₹{item['old_price']}/{item['old_unit']} → ₹{item.get('price')}/{item.get('unit')})")
+                return
+    
+    # Not found - mark as new
+    item['is_existing'] = False
+    item['old_price'] = None
 
 
 def _build_inventory_context(items: List[Dict[str, Any]], categories: List[str]) -> str:
