@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
 import '../models/item.dart';
 import '../services/inventory_service.dart';
-import '../core/master_list.dart';
 
 class InventoryProvider with ChangeNotifier {
   final InventoryService _service = InventoryService();
 
-  // Start with Master List (all price = 0.0)
-  List<Item> _items = List.from(masterInventoryList);
+  // Start with empty inventory
+  List<Item> _items = [];
+  
+  // Predefined categories that persist even when empty
+  List<String> _categories = [
+    'Anaj',
+    'Atta',
+    'Dal',
+    'Masale',
+    'Tel',
+    'Dry Fruits',
+    'Upvas',
+    'Other'
+  ];
 
   bool _isLoading = false;
   String _selectedCategory = 'Anaj';
 
   List<Item> get items => _items;
+  List<String> get categories => _categories;
   bool get isLoading => _isLoading;
   String get selectedCategory => _selectedCategory;
 
@@ -28,17 +40,52 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
-  // CRITICAL: Get only items with price > 0 for AI and Backend operations
-  List<Item> getItemsForBackend() {
-    return _items.where((i) => i.price > 0).toList();
-  }
-
   void setCategory(String category) {
     _selectedCategory = category;
     notifyListeners();
   }
 
-  // MODIFIED: Smart fetch that merges backend items with master list
+  // Add a new category
+  void addCategory(String categoryName) {
+    if (!_categories.contains(categoryName)) {
+      _categories.add(categoryName);
+      notifyListeners();
+    }
+  }
+
+  // Delete a category and all its items
+  Future<void> deleteCategory(String categoryName) async {
+    try {
+      print("🗑️ Deleting category: $categoryName");
+      
+      // Get all items in this category
+      final itemsToDelete = _items.where((i) => i.category == categoryName).toList();
+      
+      // Delete all items from backend
+      for (var item in itemsToDelete) {
+        await _service.deleteItem(item.id);
+      }
+      
+      // Remove items from local list
+      _items.removeWhere((i) => i.category == categoryName);
+      
+      // Remove category
+      _categories.remove(categoryName);
+      
+      // Switch to first available category if current was deleted
+      if (_selectedCategory == categoryName && _categories.isNotEmpty) {
+        _selectedCategory = _categories.first;
+      }
+      
+      notifyListeners();
+      print("✅ Category deleted: $categoryName");
+    } catch (e) {
+      print("❌ Delete Category Error: $e");
+      rethrow;
+    }
+  }
+
+  // Fetch items from backend
   Future<void> fetchItems() async {
     _isLoading = true;
     notifyListeners();
@@ -48,28 +95,12 @@ class InventoryProvider with ChangeNotifier {
       final backendItems = await _service.getItems();
       print("✅ Fetched ${backendItems.length} items from backend");
 
-      // Strategy: Update master list prices with backend data
-      for (var backendItem in backendItems) {
-        final index = _items.indexWhere((local) => local.id == backendItem.id);
-
-        if (index != -1) {
-          // Update existing item in master list with backend data
-          _items[index] = Item(
-            id: backendItem.id,
-            names: backendItem.names.isNotEmpty
-                ? backendItem.names
-                : _items[index]
-                    .names, // Use backend names if available, else keep master
-            price: backendItem.price, // Use backend price
-            unit: backendItem.unit,
-            category: backendItem.category,
-          );
-          print(
-              "🔄 Updated item ${backendItem.id}: ${backendItem.names[0]} - ₹${backendItem.price}");
-        } else {
-          // Item not in master list, add it (custom user item)
-          _items.add(backendItem);
-          print("➕ Added custom item: ${backendItem.names[0]}");
+      _items = backendItems;
+      
+      // Add any custom categories from backend items that aren't in predefined list
+      for (var item in backendItems) {
+        if (!_categories.contains(item.category)) {
+          _categories.add(item.category);
         }
       }
     } catch (e) {
@@ -80,16 +111,15 @@ class InventoryProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // SIMPLIFIED: Add or Update item (Backend handles upsert logic)
+  // Add or Update item
   Future<void> addItem(Item newItem) async {
     try {
-      print(
-          "💾 Saving item: ${newItem.id} (${newItem.names[0]}) - ₹${newItem.price}");
+      print("💾 Saving item: ${newItem.id} (${newItem.names[0]}) - ₹${newItem.price}");
 
-      // Call backend - it will handle update vs create automatically
+      // Call backend
       await _service.addItem(newItem);
 
-      // Update local state immediately for responsive UI
+      // Update local state
       final index = _items.indexWhere((i) => i.id == newItem.id);
       if (index != -1) {
         _items[index] = newItem;
@@ -99,55 +129,34 @@ class InventoryProvider with ChangeNotifier {
         print("✅ Added local item: ${newItem.names[0]}");
       }
 
-      // Notify UI immediately
+      // Add category if it's new
+      if (!_categories.contains(newItem.category)) {
+        _categories.add(newItem.category);
+      }
+
       notifyListeners();
     } catch (e) {
       print("❌ Save Error: $e");
-      // Re-fetch on error to restore correct state
       await fetchItems();
     }
   }
 
-  // Delete item (remove from backend and reset to price=0 locally)
+  // Delete item
   Future<void> deleteItem(String id) async {
     try {
       print("🗑️ Deleting item: $id");
 
-      // Find item in master list
-      final masterItem = masterInventoryList.firstWhere(
-        (item) => item.id == id,
-        orElse: () =>
-            Item(id: '', names: [], price: 0.0, unit: '', category: ''),
-      );
-
-      if (masterItem.id.isNotEmpty) {
-        // Item is from master list - reset to price 0.0
-        final index = _items.indexWhere((item) => item.id == id);
-        if (index != -1) {
-          _items[index] = Item(
-            id: masterItem.id,
-            names: masterItem.names,
-            price: 0.0, // Reset to 0
-            unit: masterItem.unit,
-            category: masterItem.category,
-          );
-          print("♻️ Reset item to price 0: ${masterItem.names[0]}");
-        }
-      } else {
-        // Custom item not in master list - remove completely
-        _items.removeWhere((item) => item.id == id);
-        print("🗑️ Removed custom item completely");
-      }
-
-      notifyListeners();
-
       // Delete from backend
       await _service.deleteItem(id);
+      
+      // Remove from local list
+      _items.removeWhere((i) => i.id == id);
+      
+      notifyListeners();
       print("✅ Deleted from backend");
     } catch (e) {
       print("❌ Delete Error: $e");
-      // Re-fetch on error
-      await fetchItems();
+      rethrow;
     }
   }
 }

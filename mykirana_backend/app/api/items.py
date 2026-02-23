@@ -97,7 +97,7 @@ def create_item(
         "master_id": new_item.master_id
     }
 
-@router.get("/", response_model=List[ItemResponse])
+@router.get("/")
 def get_items(
     session: Session = Depends(get_session),
     user_id: int = Depends(get_current_user)
@@ -106,25 +106,34 @@ def get_items(
     Gets ALL items belonging to the logged-in user.
     MODIFIED: Returns items as objects with 'names' array
     """
-    statement = select(Item).where(Item.owner_id == user_id)
-    items = session.exec(statement).all()
-    
-    # Convert items to response format
-    response_items = []
-    for item in items:
-        names_array = json.loads(item.names) if item.names else []
-        response_items.append({
-            "id": item.master_id,  # CRITICAL: Return master_id as id
-            "names": names_array,
-            "price": item.price,
-            "unit": item.unit,
-            "category": item.category,
-            "owner_id": item.owner_id,
-            "master_id": item.master_id
-        })
-    
-    print(f"📦 Fetched {len(response_items)} items for user {user_id}")
-    return response_items
+    try:
+        statement = select(Item).where(Item.owner_id == user_id)
+        items = session.exec(statement).all()
+        
+        # Convert items to response format
+        response_items = []
+        for item in items:
+            try:
+                names_array = json.loads(item.names) if item.names else []
+                response_items.append({
+                    "id": item.master_id,  # CRITICAL: Return master_id as id
+                    "names": names_array,
+                    "price": item.price,
+                    "unit": item.unit,
+                    "category": item.category,
+                    "owner_id": item.owner_id,
+                    "master_id": item.master_id
+                })
+            except Exception as e:
+                print(f"❌ Error processing item {item.id}: {e}")
+                continue
+        
+        print(f"📦 Fetched {len(response_items)} items for user {user_id}")
+        return response_items
+    except Exception as e:
+        print(f"❌ Error in get_items: {e}")
+        # Return empty list instead of error to prevent frontend crash
+        return []
 
 @router.put("/{item_id}/", response_model=ItemResponse)
 def update_item(

@@ -13,6 +13,11 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen> {
   final TextEditingController _searchController = TextEditingController();
+  
+  // Delete mode state
+  bool _isDeleteMode = false;
+  Set<String> _selectedItemIds = {};
+  bool _selectAll = false;
 
   final List<String> _categories = [
     'Anaj',
@@ -53,6 +58,167 @@ class _InventoryScreenState extends State<InventoryScreen> {
         margin: const EdgeInsets.all(20),
         duration: const Duration(seconds: 2)));
   }
+  
+  void _toggleDeleteMode() {
+    setState(() {
+      _isDeleteMode = !_isDeleteMode;
+      if (!_isDeleteMode) {
+        _selectedItemIds.clear();
+        _selectAll = false;
+      }
+    });
+  }
+  
+  void _toggleSelectAll(List<Item> items) {
+    setState(() {
+      _selectAll = !_selectAll;
+      if (_selectAll) {
+        _selectedItemIds = items.map((item) => item.id).toSet();
+      } else {
+        _selectedItemIds.clear();
+      }
+    });
+  }
+  
+  void _toggleItemSelection(String itemId) {
+    setState(() {
+      if (_selectedItemIds.contains(itemId)) {
+        _selectedItemIds.remove(itemId);
+      } else {
+        _selectedItemIds.add(itemId);
+      }
+    });
+  }
+  
+  void _deleteSelectedItems() {
+    if (_selectedItemIds.isEmpty) {
+      _showNotification("No items selected");
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Items"),
+        content: Text("Are you sure you want to delete ${_selectedItemIds.length} item(s)?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final provider = Provider.of<InventoryProvider>(context, listen: false);
+              for (String itemId in _selectedItemIds) {
+                await provider.deleteItem(itemId);
+              }
+              await provider.fetchItems();
+              
+              if (mounted) {
+                Navigator.pop(context);
+                _showNotification("${_selectedItemIds.length} item(s) deleted");
+                setState(() {
+                  _selectedItemIds.clear();
+                  _isDeleteMode = false;
+                  _selectAll = false;
+                });
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showAddCategoryDialog() {
+    final categoryNameCtrl = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Add New Category"),
+        content: TextField(
+          controller: categoryNameCtrl,
+          decoration: const InputDecoration(
+            labelText: "Category Name *",
+            hintText: "e.g., Snacks, Beverages",
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (categoryNameCtrl.text.trim().isNotEmpty) {
+                final provider = Provider.of<InventoryProvider>(context, listen: false);
+                provider.addCategory(categoryNameCtrl.text.trim());
+                provider.setCategory(categoryNameCtrl.text.trim());
+                Navigator.pop(context);
+                _showNotification("Category '${categoryNameCtrl.text.trim()}' added");
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Add"),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showDeleteCategoryDialog(String categoryName) {
+    final provider = Provider.of<InventoryProvider>(context, listen: false);
+    final itemCount = provider.items.where((i) => i.category == categoryName).length;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Category"),
+        content: Text(
+          itemCount > 0
+              ? "Are you sure you want to delete '$categoryName' and all its $itemCount item(s)?"
+              : "Are you sure you want to delete '$categoryName'?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await provider.deleteCategory(categoryName);
+                if (mounted) {
+                  Navigator.pop(context);
+                  _showNotification("Category '$categoryName' deleted");
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context);
+                  _showNotification("Error deleting category");
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showItemDialog({Item? item}) {
     final bool isEdit = item != null;
@@ -70,15 +236,27 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final priceCtrl =
         TextEditingController(text: isEdit ? item.price.toString() : '');
     final customUnitCtrl = TextEditingController(text: isEdit ? item.unit : '');
+    final customCategoryCtrl = TextEditingController();
 
     String selectedCategory = isEdit
         ? item.category
         : Provider.of<InventoryProvider>(context, listen: false)
             .selectedCategory;
+    
+    // Get categories from provider
+    final providerCategories = Provider.of<InventoryProvider>(context, listen: false).categories;
 
     // Initial Unit Selection Logic
     String selectedUnit = 'kg';
     bool isCustomUnit = false;
+    bool isCustomCategory = false;
+    
+    // Validation error states
+    bool showName1Error = false;
+    bool showPriceError = false;
+    bool showUnitError = false;
+    bool showCategoryError = false;
+    
     if (isEdit) {
       if (_standardUnits.contains(item.unit) && item.unit != 'Other') {
         selectedUnit = item.unit;
@@ -99,24 +277,67 @@ class _InventoryScreenState extends State<InventoryScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<String>(
-                  value: _categories.contains(selectedCategory)
-                      ? selectedCategory
-                      : _categories[0],
-                  decoration: const InputDecoration(labelText: "Category"),
-                  items: _categories
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                      .toList(),
-                  onChanged: (val) =>
-                      setDialogState(() => selectedCategory = val!),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: providerCategories.contains(selectedCategory)
+                          ? selectedCategory
+                          : providerCategories[0],
+                      decoration: InputDecoration(
+                        labelText: "Category *",
+                        errorText: showCategoryError ? "Category required" : null,
+                        errorStyle: const TextStyle(color: Colors.red),
+                      ),
+                      items: [
+                        ...providerCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                        const DropdownMenuItem(value: '__NEW_CATEGORY__', child: Text('+ New Category')),
+                      ],
+                      onChanged: (val) {
+                        setDialogState(() {
+                          selectedCategory = val!;
+                          isCustomCategory = (val == '__NEW_CATEGORY__');
+                          showCategoryError = false;
+                        });
+                      },
+                    ),
+                    // Show text field ONLY if "Other" is selected
+                    if (isCustomCategory)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: TextField(
+                          controller: customCategoryCtrl,
+                          decoration: InputDecoration(
+                            labelText: "New Category Name *",
+                            hintText: "e.g., Snacks, Beverages",
+                            isDense: true,
+                            errorText: showCategoryError ? "Category name required" : null,
+                            errorStyle: const TextStyle(color: Colors.red),
+                          ),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              showCategoryError = false;
+                            });
+                          },
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 10),
 
                 // NAME FIELD 1
                 TextField(
                   controller: name1Ctrl,
-                  decoration:
-                      const InputDecoration(labelText: "Name 1 (Primary)"),
+                  decoration: InputDecoration(
+                    labelText: "Name 1 (Primary) *",
+                    errorText: showName1Error ? "Name is required" : null,
+                    errorStyle: const TextStyle(color: Colors.red),
+                  ),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      showName1Error = false;
+                    });
+                  },
                 ),
                 const SizedBox(height: 10),
 
@@ -127,7 +348,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     child: TextField(
                       controller: priceCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "Price"),
+                      decoration: InputDecoration(
+                        labelText: "Price * (must be > 0)",
+                        errorText: showPriceError ? "Price must be > 0" : null,
+                        errorStyle: const TextStyle(color: Colors.red),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          showPriceError = false;
+                        });
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -139,7 +369,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         DropdownButtonFormField<String>(
                           value: selectedUnit,
                           isExpanded: true,
-                          decoration: const InputDecoration(labelText: "Unit"),
+                          decoration: InputDecoration(
+                            labelText: "Unit *",
+                            errorText: showUnitError ? "Unit required" : null,
+                            errorStyle: const TextStyle(color: Colors.red),
+                          ),
                           items: _standardUnits
                               .map((u) =>
                                   DropdownMenuItem(value: u, child: Text(u)))
@@ -148,6 +382,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             setDialogState(() {
                               selectedUnit = val!;
                               isCustomUnit = (val == 'Other');
+                              showUnitError = false;
                             });
                           },
                         ),
@@ -157,8 +392,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             padding: const EdgeInsets.only(top: 5),
                             child: TextField(
                               controller: customUnitCtrl,
-                              decoration: const InputDecoration(
-                                  labelText: "Type Unit", isDense: true),
+                              decoration: InputDecoration(
+                                labelText: "Type Unit *",
+                                isDense: true,
+                                errorText: showUnitError ? "Unit name required" : null,
+                                errorStyle: const TextStyle(color: Colors.red),
+                              ),
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  showUnitError = false;
+                                });
+                              },
                             ),
                           ),
                       ],
@@ -167,8 +411,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ]),
                 const SizedBox(height: 15),
 
-                // EXTRA NAME FIELDS (2, 3, 4)
-                const Text("Other Names / Aliases",
+                // EXTRA NAME FIELDS (2, 3, 4) - Optional
+                const Text("Other Names / Aliases (Optional)",
                     style:
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 TextField(
@@ -213,25 +457,61 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   child: const Text("Cancel")),
               ElevatedButton(
                 onPressed: () async {
-                  if (name1Ctrl.text.isEmpty) return;
+                  // Validation
+                  bool hasError = false;
+                  
+                  if (name1Ctrl.text.trim().isEmpty) {
+                    setDialogState(() => showName1Error = true);
+                    hasError = true;
+                  }
+                  
+                  final priceValue = double.tryParse(priceCtrl.text);
+                  if (priceCtrl.text.trim().isEmpty || priceValue == null || priceValue <= 0) {
+                    setDialogState(() => showPriceError = true);
+                    hasError = true;
+                    if (priceValue != null && priceValue <= 0) {
+                      _showNotification("Price must be greater than 0");
+                    }
+                  }
+                  
+                  if (isCustomUnit && customUnitCtrl.text.trim().isEmpty) {
+                    setDialogState(() => showUnitError = true);
+                    hasError = true;
+                  }
+                  
+                  if (isCustomCategory && customCategoryCtrl.text.trim().isEmpty) {
+                    setDialogState(() => showCategoryError = true);
+                    hasError = true;
+                  }
+                  
+                  if (hasError) return;
 
                   // Collect all names
-                  List<String> names = [name1Ctrl.text];
-                  if (name2Ctrl.text.isNotEmpty) names.add(name2Ctrl.text);
-                  if (name3Ctrl.text.isNotEmpty) names.add(name3Ctrl.text);
-                  if (name4Ctrl.text.isNotEmpty) names.add(name4Ctrl.text);
+                  List<String> names = [name1Ctrl.text.trim()];
+                  if (name2Ctrl.text.trim().isNotEmpty) names.add(name2Ctrl.text.trim());
+                  if (name3Ctrl.text.trim().isNotEmpty) names.add(name3Ctrl.text.trim());
+                  if (name4Ctrl.text.trim().isNotEmpty) names.add(name4Ctrl.text.trim());
 
                   // Determine Unit
                   String finalUnit =
-                      isCustomUnit ? customUnitCtrl.text : selectedUnit;
+                      isCustomUnit ? customUnitCtrl.text.trim() : selectedUnit;
                   if (finalUnit.isEmpty) finalUnit = 'kg';
+                  
+                  // Determine Category
+                  String finalCategory = selectedCategory;
+                  if (isCustomCategory && customCategoryCtrl.text.trim().isNotEmpty) {
+                    finalCategory = customCategoryCtrl.text.trim();
+                  } else if (isCustomCategory) {
+                    // If custom category selected but no name provided, use first available
+                    finalCategory = providerCategories.isNotEmpty ? providerCategories[0] : 'Other';
+                  }
 
                   final newItem = Item(
-                    id: isEdit ? item.id : '',
+                    id: isEdit ? item.id : 'custom_${DateTime.now().millisecondsSinceEpoch}_${names[0].toLowerCase().replaceAll(' ', '_')}',
                     names: names,
                     price: double.tryParse(priceCtrl.text) ?? 0,
                     unit: finalUnit,
-                    category: selectedCategory,
+                    category: finalCategory,
                   );
 
                   // Save the item
@@ -241,6 +521,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   // CRITICAL: Force refresh from backend to ensure UI shows latest data
                   await Provider.of<InventoryProvider>(context, listen: false)
                       .fetchItems();
+                  
+                  // Switch to the new category if it was just created
+                  if (isCustomCategory && customCategoryCtrl.text.trim().isNotEmpty) {
+                    Provider.of<InventoryProvider>(context, listen: false)
+                        .setCategory(finalCategory);
+                  }
 
                   if (mounted) {
                     Navigator.pop(context);
@@ -264,6 +550,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Consumer<InventoryProvider>(
       builder: (context, provider, child) {
         final filteredItems = provider.getFilteredItems(_searchController.text);
+        
+        // Use categories from provider
+        final displayCategories = provider.categories;
+        
+        // Ensure selected category exists
+        if (!displayCategories.contains(provider.selectedCategory) && displayCategories.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            provider.setCategory(displayCategories.first);
+          });
+        }
 
         return Scaffold(
           body: SafeArea(
@@ -274,11 +570,42 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   color: Colors.white,
-                  child: const Text("Inventory",
-                      style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryGreen)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Inventory",
+                          style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryGreen)),
+                      Row(
+                        children: [
+                          if (_isDeleteMode && _selectedItemIds.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: () => _toggleSelectAll(filteredItems),
+                              icon: Icon(
+                                _selectAll ? Icons.check_box : Icons.check_box_outline_blank,
+                                size: 20,
+                              ),
+                              label: const Text("Select All"),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.primaryGreen,
+                              ),
+                            ),
+                          IconButton(
+                            onPressed: _isDeleteMode && _selectedItemIds.isNotEmpty
+                                ? _deleteSelectedItems
+                                : _toggleDeleteMode,
+                            icon: Icon(
+                              _isDeleteMode ? Icons.delete : Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            tooltip: _isDeleteMode ? "Delete Selected" : "Delete Mode",
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Padding(
@@ -304,20 +631,41 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
-                    itemCount: _categories.length,
+                    itemCount: displayCategories.length + 1, // +1 for Add button
                     separatorBuilder: (_, __) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
-                      final cat = _categories[index];
+                      // Add Category button at the end
+                      if (index == displayCategories.length) {
+                        return ActionChip(
+                          label: const Icon(Icons.add, size: 20),
+                          onPressed: _showAddCategoryDialog,
+                          backgroundColor: Colors.white,
+                          side: BorderSide(color: AppColors.primaryGreen.withOpacity(0.5)),
+                        );
+                      }
+                      
+                      final cat = displayCategories[index];
                       final isSelected = provider.selectedCategory == cat;
-                      return ChoiceChip(
-                        label: Text(cat),
-                        selected: isSelected,
-                        onSelected: (val) => provider.setCategory(cat),
-                        selectedColor: AppColors.primaryGreen,
-                        labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black),
-                        backgroundColor: Colors.white,
-                        showCheckmark: false,
+                      return GestureDetector(
+                        onLongPress: () => _showDeleteCategoryDialog(cat),
+                        child: ChoiceChip(
+                          label: Text(cat),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            provider.setCategory(cat);
+                            // Reset delete mode when changing category
+                            setState(() {
+                              _isDeleteMode = false;
+                              _selectedItemIds.clear();
+                              _selectAll = false;
+                            });
+                          },
+                          selectedColor: AppColors.primaryGreen,
+                          labelStyle: TextStyle(
+                              color: isSelected ? Colors.white : Colors.black),
+                          backgroundColor: Colors.white,
+                          showCheckmark: false,
+                        ),
                       );
                     },
                   ),
@@ -336,19 +684,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               itemCount: filteredItems.length,
                               itemBuilder: (context, index) {
                                 final item = filteredItems[index];
+                                final isSelected = _selectedItemIds.contains(item.id);
+                                
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 12),
+                                  color: isSelected ? AppColors.primaryGreen.withOpacity(0.1) : null,
                                   child: ListTile(
-                                    onTap: () => _showItemDialog(item: item),
-                                    onLongPress: () =>
-                                        _showItemDialog(item: item),
-                                    leading: CircleAvatar(
-                                      backgroundColor: AppColors.lightGreenBg,
-                                      child: Text(item.names[0][0],
-                                          style: const TextStyle(
-                                              color: AppColors.primaryGreen,
-                                              fontWeight: FontWeight.bold)),
-                                    ),
+                                    onTap: _isDeleteMode
+                                        ? () => _toggleItemSelection(item.id)
+                                        : () => _showItemDialog(item: item),
+                                    onLongPress: () => _showItemDialog(item: item),
+                                    leading: _isDeleteMode
+                                        ? Checkbox(
+                                            value: isSelected,
+                                            onChanged: (val) => _toggleItemSelection(item.id),
+                                            activeColor: AppColors.primaryGreen,
+                                          )
+                                        : CircleAvatar(
+                                            backgroundColor: AppColors.lightGreenBg,
+                                            child: Text(item.names[0][0],
+                                                style: const TextStyle(
+                                                    color: AppColors.primaryGreen,
+                                                    fontWeight: FontWeight.bold)),
+                                          ),
                                     title: Text(item.names[0],
                                         style: const TextStyle(
                                             fontWeight: FontWeight.bold)),
@@ -368,12 +726,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                                 fontWeight: FontWeight.bold)),
                                       ],
                                     ),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.edit,
-                                          color: Colors.grey),
-                                      onPressed: () =>
-                                          _showItemDialog(item: item),
-                                    ),
+                                    trailing: _isDeleteMode
+                                        ? null
+                                        : IconButton(
+                                            icon: const Icon(Icons.edit,
+                                                color: Colors.grey),
+                                            onPressed: () =>
+                                                _showItemDialog(item: item),
+                                          ),
                                   ),
                                 );
                               },
