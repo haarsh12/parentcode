@@ -9,6 +9,7 @@ import '../core/theme.dart';
 import '../models/shop_details.dart';
 import '../services/api_client.dart';
 import '../providers/bill_provider.dart';
+import 'bill_share_modal.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   final ShopDetails shopDetails;
@@ -246,6 +247,25 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
     setState(() {
       _aiResponseText = "Bill Printed!";
     });
+  }
+
+  void _openShareModal(BillProvider billProvider) {
+    if (!billProvider.hasBillItems) return;
+
+    // Get current bill items
+    final billItems = List<Map<String, dynamic>>.from(billProvider.currentBillItems);
+    final totalAmount = billProvider.billTotal;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BillShareModal(
+          billItems: billItems,
+          totalAmount: totalAmount,
+          shopDetails: widget.shopDetails,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
   }
 
   // Helper: Format number without .0 for whole numbers
@@ -782,6 +802,26 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                                   style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.black,
                                       minimumSize: const Size(140, 48))),
+                              
+                              // Share Icon (Bigger and tilted northeast)
+                              Transform.rotate(
+                                angle: -0.5, // Tilt northeast (about 30 degrees)
+                                child: IconButton(
+                                  onPressed: currentBill.isEmpty ? null : () => _openShareModal(billProvider),
+                                  icon: Icon(
+                                    Icons.send, // Paper plane icon
+                                    color: currentBill.isEmpty ? Colors.grey : AppColors.primaryGreen,
+                                    size: 28, // Bigger size
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: currentBill.isEmpty 
+                                        ? Colors.grey[200] 
+                                        : AppColors.primaryGreen.withOpacity(0.1),
+                                    padding: const EdgeInsets.all(12),
+                                  ),
+                                ),
+                              ),
+                              
                               Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [

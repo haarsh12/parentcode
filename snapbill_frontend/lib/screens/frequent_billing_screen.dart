@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../models/item.dart';
 import '../models/shop_details.dart';
 import '../providers/bill_provider.dart';
+import 'bill_share_modal.dart';
 
 // Helper model for the bill calculation
 class BillItem {
@@ -416,6 +417,34 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
     });
   }
 
+  void _openShareModal() {
+    if (_currentBill.isEmpty) return;
+
+    // Convert BillItem to Map format for modal
+    final billItemsData = _currentBill.map((item) {
+      return {
+        'name': item.name,
+        'qty_display': item.qtyDisplay,
+        'rate': item.rate,
+        'total': item.total,
+        'unit': item.unit,
+      };
+    }).toList();
+
+    final totalAmount = _currentBill.fold<double>(0, (sum, item) => sum + item.total);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BillShareModal(
+          billItems: billItemsData,
+          totalAmount: totalAmount,
+          shopDetails: widget.shopDetails,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -748,6 +777,26 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                                 borderRadius: BorderRadius.circular(30)),
                           ),
                         ),
+                        
+                        // Share Icon (Bigger and tilted northeast)
+                        Transform.rotate(
+                          angle: -0.5, // Tilt northeast (about 30 degrees)
+                          child: IconButton(
+                            onPressed: _currentBill.isEmpty ? null : _openShareModal,
+                            icon: Icon(
+                              Icons.send, // Paper plane icon
+                              color: _currentBill.isEmpty ? Colors.grey : AppColors.primaryGreen,
+                              size: 28, // Bigger size
+                            ),
+                            style: IconButton.styleFrom(
+                              backgroundColor: _currentBill.isEmpty 
+                                  ? Colors.grey[200] 
+                                  : AppColors.primaryGreen.withOpacity(0.1),
+                              padding: const EdgeInsets.all(12),
+                            ),
+                          ),
+                        ),
+                        
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
