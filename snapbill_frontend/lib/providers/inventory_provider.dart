@@ -115,18 +115,20 @@ class InventoryProvider with ChangeNotifier {
   Future<void> addItem(Item newItem) async {
     try {
       print("💾 Saving item: ${newItem.id} (${newItem.names[0]}) - ₹${newItem.price}");
+      print("   Category: ${newItem.category}, Unit: ${newItem.unit}");
 
-      // Call backend
-      await _service.addItem(newItem);
+      // Call backend (POST endpoint handles upsert based on ID)
+      final savedItem = await _service.addItem(newItem);
+      print("✅ Backend saved item with ID: ${savedItem.id}");
 
-      // Update local state
+      // Update local state - find by ID
       final index = _items.indexWhere((i) => i.id == newItem.id);
       if (index != -1) {
-        _items[index] = newItem;
-        print("✅ Updated local item: ${newItem.names[0]}");
+        _items[index] = savedItem;
+        print("✅ Updated local item at index $index: ${savedItem.names[0]}");
       } else {
-        _items.add(newItem);
-        print("✅ Added local item: ${newItem.names[0]}");
+        _items.add(savedItem);
+        print("✅ Added new local item: ${savedItem.names[0]}");
       }
 
       // Add category if it's new

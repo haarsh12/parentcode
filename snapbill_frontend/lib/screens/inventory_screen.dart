@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/item.dart';
 import '../providers/inventory_provider.dart';
+import 'voice_inventory_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -742,10 +743,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ],
             ),
           ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _showItemDialog(),
-            backgroundColor: AppColors.primaryGreen,
-            child: const Icon(Icons.add, color: Colors.white),
+          floatingActionButton: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Voice Inventory Button
+              FloatingActionButton(
+                heroTag: 'voice_inventory',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const VoiceInventoryScreen(),
+                      fullscreenDialog: true,
+                    ),
+                  );
+                },
+                backgroundColor: Colors.blue,
+                child: const Icon(Icons.mic, color: Colors.white),
+              ),
+              const SizedBox(height: 10),
+              // Add Item Button
+              FloatingActionButton(
+                heroTag: 'add_item',
+                onPressed: () => _showItemDialog(),
+                backgroundColor: AppColors.primaryGreen,
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
+            ],
           ),
         );
       },
