@@ -14,6 +14,8 @@ import '../providers/inventory_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/bill_provider.dart';
 import '../services/printer_service.dart'; // Import the new service
+import '../services/analytics_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Screens
 import 'voice_assistant_screen.dart';
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- STATE 2: PRINTER ---
   // Using the new Service
   final PrinterService _printerService = PrinterService();
+  final AnalyticsService _analyticsService = AnalyticsService();
 
   // Keep local state for UI updates
   BlueThermalPrinter bluetooth = BlueThermalPrinter.instance;
@@ -208,6 +211,10 @@ class _HomeScreenState extends State<HomeScreen> {
     debugPrint("🏠 Items in billData: ${billData['items']}");
     debugPrint("🏠 Items count: ${(billData['items'] as List?)?.length ?? 0}");
     
+    // Get auth token for API calls
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('user_token'); // Changed from 'auth_token' to 'user_token'
+    
     // 1. Check Printer Connection FIRST
     if (_isPrinterConnected) {
       // Get Shop Details
@@ -230,6 +237,38 @@ class _HomeScreenState extends State<HomeScreen> {
       String result = await _printerService.printBill(billData, shopDetails, qrCodePath);
 
       if (result == "Success") {
+        // Save bill to database
+        if (token != null) {
+          debugPrint("💾 Preparing to save bill to database...");
+          final items = billData['items'] as List;
+          debugPrint("💾 Bill has ${items.length} items");
+          
+          final billItems = items.map((item) {
+            debugPrint("💾 Item: $item");
+            return {
+              'name': item['name'],
+              'category': item['category'] ?? 'Other',
+              'quantity': item['qty'] ?? item['quantity'] ?? 1,  // Use 'qty' field
+              'unit': item['unit'],
+              'price': item['price'] ?? item['rate'] ?? 0,
+              'total': item['total'],
+            };
+          }).toList();
+          
+          debugPrint("💾 Mapped items: $billItems");
+          
+          final saved = await _analyticsService.saveBill(
+            token,
+            totalAmount: (billData['total'] as num).toDouble(),
+            items: billItems,
+            paymentMethod: 'cash',
+          );
+          
+          debugPrint("💾 Bill saved to database: $saved");
+        } else {
+          debugPrint("❌ No auth token - cannot save bill");
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("✅ Print Successful! Bill Saved.")));
 
@@ -252,6 +291,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // For now, I will allow saving as PDF fallback if connection drops suddenly
       await _printPdf(billData);
+      
+      // Save bill to database even for PDF
+      if (token != null) {
+        debugPrint("💾 Preparing to save bill to database (PDF mode)...");
+        final items = billData['items'] as List;
+        final billItems = items.map((item) {
+          return {
+            'name': item['name'],
+            'category': item['category'] ?? 'Other',
+            'quantity': item['qty'] ?? item['quantity'] ?? 1,  // Use 'qty' field
+            'unit': item['unit'],
+            'price': item['price'] ?? item['rate'] ?? 0,  // Handle both 'price' and 'rate'
+            'total': item['total'],
+          };
+        }).toList();
+        
+        await _analyticsService.saveBill(
+          token,
+          totalAmount: (billData['total'] as num).toDouble(),
+          items: billItems,
+          paymentMethod: 'cash',
+        );
+      }
+      
       setState(() {
         _pastBills.insert(0, billData);
       });
@@ -337,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // 4. HISTORY
-          HistoryScreen(shopDetails: _shopDetails, pastBills: _pastBills),
+          HistoryScreen(shopDetails: _shopDetails),
 
           // 5. PROFILE
           const ProfileScreen(),

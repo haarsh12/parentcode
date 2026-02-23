@@ -38,6 +38,9 @@ dependencies:
   printing: ^5.9.3
   image: ^4.5.4
 
+  # --- CHARTS ---
+  fl_chart: ^0.66.0
+
   # NOTE: We REMOVED the forced 'image' version. 
   # Flutter will now automatically use the latest version (v4.x)
   # which makes pdf, printing, and esc_pos_utils_plus happy.

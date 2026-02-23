@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.db.database import create_db_and_tables
-from app.api import auth, items, voice, voice_inventory, sms_share
+from app.api import auth, items, voice, voice_inventory, sms_share, analytics
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,6 +18,7 @@ app.include_router(items.router, prefix="/items", tags=["Inventory"])
 app.include_router(voice.router, prefix="/voice", tags=["Voice AI"])
 app.include_router(voice_inventory.router, prefix="/inventory", tags=["Voice Inventory"])
 app.include_router(sms_share.router, prefix="/sms", tags=["SMS Sharing"])
+app.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Dashboard"])
 
 @app.get("/")
 def health_check():

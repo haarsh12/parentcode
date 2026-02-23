@@ -1,7 +1,7 @@
 # reset_database.py
 from sqlmodel import SQLModel
 from app.db.database import engine
-from app.db.models import User, Item, OTP  # Import all models
+from app.db.models import User, Item, OTP, Bill, SaleItem  # Import all models
 
 def reset_database():
     """
@@ -26,6 +26,8 @@ def reset_database():
     print("   - User table")
     print("   - Item table (with master_id and names fields)")
     print("   - OTP table")
+    print("   - Bill table (for saved bills)")
+    print("   - SaleItem table (for analytics)")
 
 if __name__ == "__main__":
     reset_database()

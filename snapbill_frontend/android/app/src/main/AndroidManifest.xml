@@ -19,6 +19,15 @@
         android:label="Snapbill"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        
+        <!-- DISABLE SPEECH RECOGNITION SOUNDS -->
+        <meta-data
+            android:name="android.speech.recognition.EXTRA_AUDIO_BEEP_START"
+            android:value="false" />
+        <meta-data
+            android:name="android.speech.recognition.EXTRA_AUDIO_BEEP_END"
+            android:value="false" />
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,6 +36,15 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+            
+            <!-- DISABLE SPEECH RECOGNITION SOUNDS IN ACTIVITY -->
+            <meta-data
+                android:name="android.speech.recognition.EXTRA_AUDIO_BEEP_START"
+                android:value="false" />
+            <meta-data
+                android:name="android.speech.recognition.EXTRA_AUDIO_BEEP_END"
+                android:value="false" />
+            
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"

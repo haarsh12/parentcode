@@ -43,3 +43,42 @@ class Item(TimestampModel, table=True):
     price: float                          # e.g., 0.0 (unset) or 45.0 (set by user)
     unit: str                             # e.g., "kg", "litre", "plate"
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+# 5. Bill Model (Saved Bills)
+class Bill(TimestampModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    
+    # Bill details
+    total_amount: float
+    total_items: int
+    
+    # Bill items stored as JSON string
+    # Example: '[{"name":"Chawal","quantity":2,"unit":"kg","price":50,"total":100}]'
+    items_json: str
+    
+    # Optional customer info
+    customer_phone: Optional[str] = None
+    customer_name: Optional[str] = None
+    
+    # Metadata
+    bill_date: datetime = Field(default_factory=datetime.utcnow, index=True)
+    payment_method: Optional[str] = "cash"  # cash, upi, card
+
+# 6. Sale Item Model (Individual items sold - for analytics)
+class SaleItem(TimestampModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    bill_id: int = Field(foreign_key="bill.id", index=True)
+    
+    # Item details
+    item_name: str
+    item_category: str = Field(index=True)
+    quantity: float
+    unit: str
+    price_per_unit: float
+    total_price: float
+    
+    # Sale metadata
+    sale_date: datetime = Field(default_factory=datetime.utcnow, index=True)
+    hour_of_day: int = Field(index=True)  # 0-23 for peak hour analysis
