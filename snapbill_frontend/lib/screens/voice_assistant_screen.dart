@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../models/shop_details.dart';
 import '../services/api_client.dart';
 import '../providers/bill_provider.dart';
 import 'bill_share_modal.dart';
+import '../widgets/siri_wave_orb.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   final ShopDetails shopDetails;
@@ -29,16 +31,19 @@ class VoiceAssistantScreen extends StatefulWidget {
   State<VoiceAssistantScreen> createState() => _VoiceAssistantScreenState();
 }
 
-class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
-    with SingleTickerProviderStateMixin {
+class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   late stt.SpeechToText _speech;
   late FlutterTts _flutterTts;
-  late AnimationController _pulseController;
+  
+  // Native audio control
+  static const platform = MethodChannel('com.snapbill/audio');
 
   bool _isListening = false;
-  String _currentSpeechChunk = "";
-  String _aiResponseText = "Tap to Speak";
-  Timer? _silenceTimer;
+  String _accumulatedText = ""; // Accumulated text during session
+  String _currentSpeechChunk = ""; // Live chunk
+  String _aiResponseText = "Tap to Start";
+  double _audioLevel = 0.0; // For animation
+  Timer? _audioLevelTimer;
   final ApiClient _apiClient = ApiClient();
   
   // Edit Mode State
@@ -49,87 +54,173 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
     super.initState();
     _speech = stt.SpeechToText();
     _flutterTts = FlutterTts();
-    _setupAnimation();
     _initTts();
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _silenceTimer?.cancel();
+    _speech.stop();
     _flutterTts.stop();
+    _audioLevelTimer?.cancel();
+    _unmuteSystemSounds();
     super.dispose();
   }
 
-  // --- RESTORED: Exact TTS Settings from your previous version ---
+  /// Mute system sounds (beeps)
+  Future<void> _muteSystemSounds() async {
+    try {
+      await platform.invokeMethod('muteSystemSounds');
+      debugPrint('🔇 System sounds muted');
+    } catch (e) {
+      debugPrint('❌ Failed to mute: $e');
+    }
+  }
+
+  /// Unmute system sounds
+  Future<void> _unmuteSystemSounds() async {
+    try {
+      await platform.invokeMethod('unmuteSystemSounds');
+      debugPrint('🔊 System sounds unmuted');
+    } catch (e) {
+      debugPrint('❌ Failed to unmute: $e');
+    }
+  }
+
   void _initTts() async {
     await _flutterTts.setLanguage("hi-IN");
     await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.5); // Slower rate for clarity
-    await _flutterTts.awaitSpeakCompletion(
-        true); // CRITICAL: Ensures full sentence is spoken
+    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.awaitSpeakCompletion(true);
   }
 
-  void _setupAnimation() {
-    _pulseController = AnimationController(
-        vsync: this,
-        duration: const Duration(seconds: 1),
-        lowerBound: 0.8,
-        upperBound: 1.2)
-      ..repeat(reverse: true);
-  }
-
+  /// Manual tap to start/stop listening
   void _toggleListening() async {
     if (_isListening) {
-      _stopListening();
+      // Stop and process
+      await _stopListeningAndProcess();
     } else {
-      _pulseController.forward();
-      setState(() {
-        _isListening = true;
-        _aiResponseText = "Listening...";
-      });
-      _startListening();
+      // Start listening
+      await _startListening();
     }
   }
 
-  void _startListening() async {
+  /// Start listening session - MANUAL CONTROL ONLY
+  Future<void> _startListening() async {
+    // Mute system beeps FIRST
+    await _muteSystemSounds();
+    
     bool available = await _speech.initialize(
-        onError: (val) => debugPrint('STT Error: $val'),
-        onStatus: (status) {
-          if (status == 'done' || status == 'notListening') {
-            // Only restart if we are supposed to be listening and AI is NOT speaking
-            if (_isListening) {
-              _startListening();
-            }
-          }
-        });
+      onError: (val) {
+        debugPrint('🎤 STT Error: $val');
+        // DO NOT auto-restart - just log error
+      },
+      onStatus: (status) {
+        debugPrint('🎤 Status: $status');
+        // DO NOT auto-restart - user must manually tap to restart
+      },
+    );
 
     if (available) {
-      _speech.listen(
-        onResult: (val) {
-          setState(() => _currentSpeechChunk = val.recognizedWords);
-          _silenceTimer?.cancel();
-          _silenceTimer = Timer(const Duration(seconds: 2), () {
-            if (_currentSpeechChunk.trim().isNotEmpty) {
-              // Stop listening immediately to prevent interruption
-              _speech.stop();
-              _processAiRequest(_currentSpeechChunk);
-              setState(() => _currentSpeechChunk = "");
-            }
-          });
-        },
-        localeId: 'en_IN',
-        listenMode: stt.ListenMode.dictation,
-        partialResults: true,
-      );
+      setState(() {
+        _isListening = true;
+        _accumulatedText = "";
+        _currentSpeechChunk = "";
+        _aiResponseText = "Listening...";
+        _audioLevel = 0.3;
+      });
+
+      await _startSpeechRecognition();
+      _startAudioLevelAnimation();
+      debugPrint('🎙️ Listening started - MANUAL CONTROL ONLY');
     }
   }
 
-  void _stopListening() {
-    _speech.stop();
-    _silenceTimer?.cancel();
-    _pulseController.stop();
-    setState(() => _isListening = false);
+  /// Internal speech recognition start
+  Future<void> _startSpeechRecognition() async {
+    await _speech.listen(
+      onResult: _handleSpeechResult,
+      listenMode: stt.ListenMode.dictation,
+      partialResults: true,
+      localeId: 'en_IN',
+      cancelOnError: false,
+      // CRITICAL: Disable timeouts completely
+      listenFor: const Duration(hours: 24), // Effectively infinite
+      pauseFor: const Duration(hours: 1),   // Allow very long pauses
+    );
+  }
+
+  /// Audio level animation for orb
+  void _startAudioLevelAnimation() {
+    _audioLevelTimer?.cancel();
+    
+    _audioLevelTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (timer) {
+        if (!_isListening) {
+          timer.cancel();
+          return;
+        }
+        
+        setState(() {
+          // Simulate audio level based on speech activity
+          if (_currentSpeechChunk.isNotEmpty) {
+            _audioLevel = 0.6 + (0.4 * (timer.tick % 10) / 10);
+          } else {
+            _audioLevel = 0.3 + (0.2 * (timer.tick % 10) / 10);
+          }
+        });
+      },
+    );
+  }
+
+  /// Handle speech results
+  void _handleSpeechResult(result) {
+    if (!_isListening) return;
+
+    setState(() {
+      _currentSpeechChunk = result.recognizedWords;
+    });
+
+    // If final result, accumulate it
+    if (result.finalResult && _currentSpeechChunk.isNotEmpty) {
+      _accumulatedText += _currentSpeechChunk + ' ';
+      setState(() {
+        _currentSpeechChunk = '';
+      });
+      debugPrint('📝 Accumulated: $_accumulatedText');
+    }
+  }
+
+  /// Stop listening and process accumulated text
+  Future<void> _stopListeningAndProcess() async {
+    if (!_isListening) return;
+
+    await _speech.stop();
+    _audioLevelTimer?.cancel();
+    
+    // Unmute system sounds
+    await _unmuteSystemSounds();
+
+    // Combine all text
+    final finalText = (_accumulatedText + ' ' + _currentSpeechChunk).trim();
+
+    setState(() {
+      _isListening = false;
+      _accumulatedText = '';
+      _currentSpeechChunk = '';
+      _audioLevel = 0.0;
+    });
+
+    debugPrint('🛑 Stopped. Final text: $finalText');
+
+    // Process only if we have text
+    if (finalText.isNotEmpty) {
+      await _processAiRequest(finalText);
+    } else {
+      setState(() {
+        _aiResponseText = "No speech detected";
+      });
+    }
   }
 
   Future<void> _processAiRequest(String text) async {
@@ -442,69 +533,56 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                   ]),
             ),
 
-            // 2. Mic Animation (hide when in edit mode)
+            // 2. Siri-Style Voice Orb (hide when in edit mode)
             if (!_isEditMode)
-              Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              GestureDetector(
-                  onTap: _toggleListening,
-                  child: AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        return Transform.scale(
-                            scale: _isListening ? _pulseController.value : 1.0,
-                            child: Container(
-                                height: 120,
-                                width: 120,
-                                decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _isListening
-                                        ? AppColors.primaryGreen
-                                        : Colors.white,
-                                    boxShadow: [
-                                      BoxShadow(
-                                          color: _isListening
-                                              ? AppColors.primaryGreen
-                                                  .withOpacity(0.5)
-                                              : Colors.black12,
-                                          blurRadius: 30,
-                                          spreadRadius: 5)
-                                    ],
-                                    border: Border.all(
-                                        color: _isListening
-                                            ? Colors.transparent
-                                            : Colors.grey.shade300,
-                                        width: 2)),
-                                child: Icon(
-                                    _isListening
-                                        ? Icons.graphic_eq
-                                        : Icons.mic_none_rounded,
-                                    size: 50,
-                                    color: _isListening
-                                        ? Colors.white
-                                        : Colors.black)));
-                      })),
-              const SizedBox(height: 15),
-              Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 20),
+                  
+                  // Siri Wave Orb
+                  SiriWaveOrb(
+                    isActive: _isListening,
+                    audioLevel: _audioLevel,
+                    onTap: _toggleListening,
+                    size: 200,
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Live Speech Text
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
                       _isListening
-                          ? (_currentSpeechChunk.isEmpty
+                          ? (_accumulatedText + ' ' + _currentSpeechChunk).trim().isEmpty
                               ? "Listening..."
-                              : _currentSpeechChunk)
-                          : "Tap to Speak",
+                              : (_accumulatedText + ' ' + _currentSpeechChunk).trim()
+                          : "Tap to Start",
                       textAlign: TextAlign.center,
-                      maxLines: 2,
-                      style:
-                          const TextStyle(fontSize: 14, color: Colors.grey))),
-              const SizedBox(height: 10),
+                      maxLines: 3,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 12),
 
-              // Response Text
-              Text(_aiResponseText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
-            ]),
+                  // Response Text
+                  Text(
+                    _aiResponseText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
 
             // 3. Live Bill Container
             Expanded(
