@@ -439,6 +439,7 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
           billItems: billItemsData,
           totalAmount: totalAmount,
           shopDetails: widget.shopDetails,
+          customerName: 'Walk-in',
         ),
         fullscreenDialog: true,
       ),

@@ -248,7 +248,8 @@ class _HomeScreenState extends State<HomeScreen> {
             return {
               'name': item['name'],
               'category': item['category'] ?? 'Other',
-              'quantity': item['qty'] ?? item['quantity'] ?? 1,  // Use 'qty' field
+              'quantity': item['qty'] ?? item['quantity'] ?? 1,
+              'qty_display': item['qty_display'] ?? '${item['qty'] ?? item['quantity'] ?? 1}${item['unit'] ?? ''}',
               'unit': item['unit'],
               'price': item['price'] ?? item['rate'] ?? 0,
               'total': item['total'],
@@ -261,6 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
             token,
             totalAmount: (billData['total'] as num).toDouble(),
             items: billItems,
+            customerName: billData['customerName'] as String?,
             paymentMethod: 'cash',
           );
           
@@ -300,9 +302,10 @@ class _HomeScreenState extends State<HomeScreen> {
           return {
             'name': item['name'],
             'category': item['category'] ?? 'Other',
-            'quantity': item['qty'] ?? item['quantity'] ?? 1,  // Use 'qty' field
+            'quantity': item['qty'] ?? item['quantity'] ?? 1,
+            'qty_display': item['qty_display'] ?? '${item['qty'] ?? item['quantity'] ?? 1}${item['unit'] ?? ''}',
             'unit': item['unit'],
-            'price': item['price'] ?? item['rate'] ?? 0,  // Handle both 'price' and 'rate'
+            'price': item['price'] ?? item['rate'] ?? 0,
             'total': item['total'],
           };
         }).toList();
@@ -311,6 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
           token,
           totalAmount: (billData['total'] as num).toDouble(),
           items: billItems,
+          customerName: billData['customerName'] as String?,
           paymentMethod: 'cash',
         );
       }

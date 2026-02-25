@@ -82,7 +82,15 @@ class _OtpScreenState extends State<OtpScreen> {
 
     if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter complete OTP")),
+        const SnackBar(
+          content: Text(
+            'Please enter complete 6-digit OTP',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
+        ),
       );
       return;
     }
@@ -90,7 +98,6 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // NEW LOGIC: Call Backend to Verify
       await Provider.of<AuthProvider>(context, listen: false).verifyOtp(
           phone: widget.phoneNumber,
           otp: otp,
@@ -106,17 +113,49 @@ class _OtpScreenState extends State<OtpScreen> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceAll('Exception:', '').trim(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      
+      // Parse error message
+      String errorMessage = 'Verification failed';
+      final errorStr = e.toString();
+      
+      if (errorStr.contains('Invalid OTP') || errorStr.contains('incorrect')) {
+        errorMessage = 'Incorrect OTP. Please try again.';
+      } else if (errorStr.contains('expired')) {
+        errorMessage = 'OTP has expired. Please request a new one.';
+      } else if (errorStr.contains('not found') || errorStr.contains('does not exist')) {
+        errorMessage = 'Phone number not registered.';
+      } else if (errorStr.contains('Connection') || errorStr.contains('network')) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (errorStr.contains('Server') || errorStr.contains('500')) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (errorStr.contains('timeout')) {
+        errorMessage = 'Request timeout. Please try again.';
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessage,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'RETRY',
+              textColor: Colors.white,
+              onPressed: () {
+                // Clear OTP fields
+                for (var controller in _otpControllers) {
+                  controller.clear();
+                }
+                _focusNodes[0].requestFocus();
+              },
+            ),
           ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+        );
+      }
     }
   }
 

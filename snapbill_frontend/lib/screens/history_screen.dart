@@ -82,17 +82,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Dashboard"),
-        backgroundColor: AppColors.primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Colors.black87),
             onPressed: _loadData,
           ),
         ],
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFF8F9FA),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -311,49 +311,54 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _showBillDetails(BillHistory bill) {
+    // Get shop details from widget
+    final shopName = widget.shopDetails.shopName;
+    final shopAddress = widget.shopDetails.address;
+    final shopPhone1 = widget.shopDetails.phone1;
+    final shopPhone2 = widget.shopDetails.phone2;
+    
     showDialog(
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 650),
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 700),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header with customer name
+              // Customer Name Header
               Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text(
+                  bill.customerName ?? 'Walk-in',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      bill.customerName ?? 'Customer',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    if (bill.customerPhone != null)
-                      Text(
-                        'Ph: ${bill.customerPhone}',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                  ],
-                ),
               ),
-              const Divider(height: 1),
+              
+              // Phone Number
+              if (bill.customerPhone != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Ph: ${bill.customerPhone}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              
+              Divider(height: 1, color: Colors.grey[300]),
               
               // Bill details
               Flexible(
@@ -362,80 +367,81 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Bill ID and Date
+                      // Bill ID and Date Row
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Bill ID: ${bill.id}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                'Time: ${DateFormat('hh:mm:ss a').format(bill.billDate)}',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            'Bill ID: ${bill.id}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                DateFormat('dd-MM-yyyy').format(bill.billDate),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                'Cust ID: ${bill.id.toString().padLeft(3, '0')}',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            DateFormat('dd-MM-yyyy').format(bill.billDate),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      
+                      // Time and Cust ID Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Time: ${DateFormat('hh:mm:ss a').format(bill.billDate)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          Text(
+                            'Cust ID: ${bill.id.toString().padLeft(3, '0')}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 16),
                       
                       // Table Header
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           border: Border(
+                            top: BorderSide(color: Colors.grey[300]!),
                             bottom: BorderSide(color: Colors.grey[300]!),
                           ),
                         ),
                         child: const Row(
                           children: [
                             Expanded(
-                              flex: 3,
+                              flex: 4,
                               child: Text(
                                 'ITEM',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 13,
+                                  color: Colors.black,
                                 ),
                               ),
                             ),
                             Expanded(
-                              flex: 1,
+                              flex: 2,
                               child: Text(
                                 'QTY',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 13,
+                                  color: Colors.black,
                                 ),
                               ),
                             ),
@@ -446,7 +452,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 13,
+                                  color: Colors.black,
                                 ),
                               ),
                             ),
@@ -457,7 +464,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 13,
+                                  color: Colors.black,
                                 ),
                               ),
                             ),
@@ -468,14 +476,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       // Items List
                       ...bill.items.map((item) {
                         final name = item['name'] ?? '';
-                        final qty = item['quantity'] ?? item['qty'] ?? 0;
+                        
+                        // Try to get qty_display first, then fall back to qty/quantity
+                        String qtyDisplay;
+                        if (item['qty_display'] != null && item['qty_display'].toString().isNotEmpty) {
+                          qtyDisplay = item['qty_display'].toString();
+                        } else {
+                          final qty = item['quantity'] ?? item['qty'] ?? 0;
+                          final qtyDouble = qty is num ? qty.toDouble() : (double.tryParse(qty.toString()) ?? 0.0);
+                          final unit = item['unit'] ?? '';
+                          qtyDisplay = '${_formatNumber(qtyDouble)}${unit}';
+                        }
+                        
                         final unit = item['unit'] ?? '';
                         final price = item['price'] ?? item['rate'] ?? 0;
                         final total = item['total'] ?? 0;
                         
-                        final qtyDouble = qty is num ? qty.toDouble() : 0.0;
-                        final priceDouble = price is num ? price.toDouble() : 0.0;
-                        final totalDouble = total is num ? total.toDouble() : 0.0;
+                        final priceDouble = price is num ? price.toDouble() : (double.tryParse(price.toString()) ?? 0.0);
+                        final totalDouble = total is num ? total.toDouble() : (double.tryParse(total.toString()) ?? 0.0);
                         
                         return Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -487,20 +505,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                flex: 3,
+                                flex: 4,
                                 child: Text(
                                   name.toString(),
                                   style: const TextStyle(
                                     fontSize: 14,
+                                    color: Colors.black87,
                                   ),
                                 ),
                               ),
                               Expanded(
-                                flex: 1,
+                                flex: 2,
                                 child: Text(
-                                  '${_formatNumber(qtyDouble)}',
+                                  qtyDisplay,
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 14),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
                                 ),
                               ),
                               Expanded(
@@ -508,7 +530,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 child: Text(
                                   '₹${_formatNumber(priceDouble)}/$unit',
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(fontSize: 13),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.black87,
+                                  ),
                                 ),
                               ),
                               Expanded(
@@ -519,6 +544,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
+                                    color: Colors.black,
                                   ),
                                 ),
                               ),
@@ -529,12 +555,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       
                       const SizedBox(height: 16),
                       
-                      // Total
+                      // Total Section
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
                           border: Border(
-                            top: BorderSide(color: Colors.grey[400]!, width: 2),
+                            top: BorderSide(color: Colors.grey[300]!, width: 1),
                           ),
                         ),
                         child: Row(
@@ -543,14 +569,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             const Text(
                               'TOTAL:',
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.black,
                               ),
                             ),
                             Text(
                               '₹${_formatNumber(bill.totalAmount)}',
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primaryGreen,
                               ),
@@ -559,7 +586,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                       ),
                       
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       
                       // Footer
                       Center(
@@ -568,23 +595,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             Text(
                               'THANK YOU, VISIT AGAIN',
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: Colors.grey[500],
                                 fontSize: 12,
                                 letterSpacing: 0.5,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 8),
                             Text(
-                              widget.shopDetails.shopName,
-                              style: TextStyle(
-                                color: Colors.grey[500],
+                              shopName,
+                              style: const TextStyle(
+                                color: Colors.black87,
                                 fontSize: 11,
                               ),
                             ),
+                            const SizedBox(height: 2),
                             Text(
-                              'Powered by Vyamit AI',
+                              'App: Vyamit AI',
                               style: TextStyle(
-                                color: Colors.grey[400],
+                                color: Colors.grey[500],
                                 fontSize: 10,
                               ),
                             ),

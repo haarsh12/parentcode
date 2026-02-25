@@ -78,7 +78,7 @@ class TopSellingItemsWidget extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          ...items.take(3).toList().asMap().entries.map((entry) {
+          ...items.take(5).toList().asMap().entries.map((entry) {
             final index = entry.key;
             final item = entry.value;
             return Padding(

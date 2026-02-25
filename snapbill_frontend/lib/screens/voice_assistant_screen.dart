@@ -304,7 +304,17 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       // 1. Call API
       final data = await _apiClient.post('/voice/process', {"text": text});
 
-      // 2. Handle Text Response (Voice)
+      // 2. Extract customer name (if provided by AI)
+      String customerName = data['customer_name'] ?? "Walk-in";
+      final billProvider = Provider.of<BillProvider>(context, listen: false);
+      
+      // Update customer name in bill provider
+      if (customerName != "Walk-in") {
+        billProvider.setCustomerName(customerName);
+        debugPrint("👤 Customer name set: $customerName");
+      }
+
+      // 3. Handle Text Response (Voice)
       String? msg = data['msg'];
       if (msg != null && msg.isNotEmpty) {
         setState(() => _aiResponseText = msg);
@@ -313,11 +323,9 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         await _flutterTts.speak(msg);
       }
 
-      // 3. Update Bill (Only AFTER voice finishes)
+      // 4. Update Bill (Only AFTER voice finishes)
       if (data['type'] == 'BILL') {
         List<dynamic> newItems = data['items'] ?? [];
-        // Use BillProvider instead of local state
-        final billProvider = Provider.of<BillProvider>(context, listen: false);
         
         debugPrint("🎤 VOICE API returned ${newItems.length} items");
         
@@ -342,7 +350,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         }
       }
 
-      // 4. Resume Listening (Optional - makes it conversational)
+      // 5. Resume Listening (Optional - makes it conversational)
       // Uncomment the line below if you want it to auto-listen after speaking
       // _toggleListening();
     } catch (e) {
@@ -361,6 +369,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
 
     debugPrint("✅ VOICE BILL: Has ${billProvider.currentBillItems.length} items");
+    debugPrint("👤 Customer: ${billProvider.customerName}");
     
     // DEBUG: Print each item structure
     for (var item in billProvider.currentBillItems) {
@@ -395,6 +404,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
           "${DateTime.now().day}-${DateTime.now().month}-${DateTime.now().year}",
       'time': "${DateTime.now().hour}:${DateTime.now().minute}",
       'total': billProvider.billTotal,
+      'customerName': billProvider.customerName, // Add customer name
       'shopName': widget.shopDetails.shopName,
       'shopAddress': widget.shopDetails.address,
       'shopPhone': widget.shopDetails.phone1,
@@ -427,6 +437,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
           billItems: billItems,
           totalAmount: totalAmount,
           shopDetails: widget.shopDetails,
+          customerName: billProvider.customerName,
         ),
         fullscreenDialog: true,
       ),

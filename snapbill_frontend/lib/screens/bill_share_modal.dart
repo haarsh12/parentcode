@@ -8,12 +8,14 @@ class BillShareModal extends StatefulWidget {
   final List<Map<String, dynamic>> billItems;
   final double totalAmount;
   final ShopDetails shopDetails;
+  final String? customerName;
 
   const BillShareModal({
     super.key,
     required this.billItems,
     required this.totalAmount,
     required this.shopDetails,
+    this.customerName,
   });
 
   @override
@@ -21,9 +23,16 @@ class BillShareModal extends StatefulWidget {
 }
 
 class _BillShareModalState extends State<BillShareModal> {
-  final TextEditingController _customerNameController =
-      TextEditingController(text: 'Walk-in');
+  late final TextEditingController _customerNameController;
   final TextEditingController _mobileController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _customerNameController = TextEditingController(
+      text: widget.customerName ?? 'Walk-in'
+    );
+  }
 
   @override
   void dispose() {

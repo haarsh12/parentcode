@@ -6,6 +6,9 @@ class BillProvider with ChangeNotifier {
   // Live bill items (persists across screens)
   List<Map<String, dynamic>> _currentBillItems = [];
   
+  // Customer name for current bill
+  String _customerName = "Walk-in";
+  
   // Sequential bill number
   int _lastBillNumber = 0;
   
@@ -14,6 +17,7 @@ class BillProvider with ChangeNotifier {
 
   // Getters
   List<Map<String, dynamic>> get currentBillItems => _currentBillItems;
+  String get customerName => _customerName;
   int get nextBillNumber => _lastBillNumber + 1;
   String? get qrCodePath => _qrCodePath;
   bool get hasBillItems => _currentBillItems.isNotEmpty;
@@ -28,6 +32,9 @@ class BillProvider with ChangeNotifier {
     // Load QR code path
     _qrCodePath = prefs.getString('qr_code_path');
     
+    // Load customer name
+    _customerName = prefs.getString('current_customer_name') ?? "Walk-in";
+    
     // Load current bill items (if app was closed with items)
     final billItemsJson = prefs.getString('current_bill_items');
     if (billItemsJson != null) {
@@ -40,6 +47,13 @@ class BillProvider with ChangeNotifier {
       }
     }
     
+    notifyListeners();
+  }
+
+  // Set customer name
+  void setCustomerName(String name) {
+    _customerName = name.trim().isEmpty ? "Walk-in" : name.trim();
+    _saveCustomerNameToStorage();
     notifyListeners();
   }
 
@@ -69,7 +83,9 @@ class BillProvider with ChangeNotifier {
   // Clear current bill (Cancel Bill button)
   void clearBill() {
     _currentBillItems.clear();
+    _customerName = "Walk-in"; // Reset customer name
     _saveBillItemsToStorage();
+    _saveCustomerNameToStorage();
     notifyListeners();
   }
 
@@ -114,6 +130,12 @@ class BillProvider with ChangeNotifier {
       final jsonString = jsonEncode(_currentBillItems);
       await prefs.setString('current_bill_items', jsonString);
     }
+  }
+
+  // Private: Save customer name to storage
+  Future<void> _saveCustomerNameToStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('current_customer_name', _customerName);
   }
 
   // Calculate total

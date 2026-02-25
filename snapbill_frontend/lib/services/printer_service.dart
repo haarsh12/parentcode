@@ -173,9 +173,9 @@ class PrinterService {
               pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text("Cst: Walk-in",
+                    pw.Text("Cst: ${billData['customerName'] ?? 'Walk-in'}",
                         style: const pw.TextStyle(
-                            fontSize: 12)), // Placeholder as requested
+                            fontSize: 12)),
                     pw.Text("Time: ${billData['time'] ?? '-'}",
                         style: const pw.TextStyle(fontSize: 12)),
                   ]),
