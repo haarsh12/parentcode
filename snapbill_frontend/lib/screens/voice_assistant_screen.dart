@@ -93,6 +93,54 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     await _flutterTts.awaitSpeakCompletion(true);
   }
 
+  /// Reset entire voice page
+  void _resetVoicePage() {
+    // Stop listening if active
+    if (_isListening) {
+      _speech.stop();
+      _audioLevelTimer?.cancel();
+      _unmuteSystemSounds();
+    }
+    
+    // Get bill provider
+    final billProvider = Provider.of<BillProvider>(context, listen: false);
+    
+    // Clear everything
+    billProvider.clearBill();
+    
+    setState(() {
+      _isListening = false;
+      _accumulatedText = '';
+      _currentSpeechChunk = '';
+      _aiResponseText = 'Tap to Start';
+      _audioLevel = 0.0;
+      if (_isEditMode) {
+        _isEditMode = false;
+      }
+    });
+    
+    debugPrint('🔄 Voice page reset');
+  }
+
+  /// Get last 2 lines of text for display (scrolling effect)
+  String _getDisplayText() {
+    final fullText = (_accumulatedText + ' ' + _currentSpeechChunk).trim();
+    
+    if (fullText.isEmpty) {
+      return _isListening ? "Listening..." : "Tap to Start";
+    }
+    
+    // Split by spaces and take last ~15 words (approximately 2 lines)
+    final words = fullText.split(' ');
+    if (words.length <= 15) {
+      return fullText;
+    }
+    
+    // Take last 15 words (scrolling effect - old text disappears)
+    final lastWords = words.sublist(words.length - 15);
+    return lastWords.join(' ');
+  }
+
   /// Manual tap to start/stop listening
   void _toggleListening() async {
     if (_isListening) {
@@ -559,61 +607,69 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                   ]),
             ),
 
-            // 2. Siri-Style Voice Orb (hide when in edit mode)
+            // 2. Siri-Style Voice Orb Section (Compact, Upper Position)
             if (!_isEditMode)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 20),
-                  
-                  // Siri Wave Orb
-                  SiriWaveOrb(
-                    isActive: _isListening,
-                    audioLevel: _audioLevel,
-                    onTap: _toggleListening,
-                    size: 200,
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Live Speech Text
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      _isListening
-                          ? (_accumulatedText + ' ' + _currentSpeechChunk).trim().isEmpty
-                              ? "Listening..."
-                              : (_accumulatedText + ' ' + _currentSpeechChunk).trim()
-                          : "Tap to Start",
-                      textAlign: TextAlign.center,
-                      maxLines: 3,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                        height: 1.4,
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Siri Wave Orb (Slightly smaller)
+                    SiriWaveOrb(
+                      isActive: _isListening,
+                      audioLevel: _audioLevel,
+                      onTap: _toggleListening,
+                      size: 160,
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Live Speech Text (2 lines max, scrolling effect)
+                    Container(
+                      height: 48, // Fixed height for 2 lines
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Center(
+                        child: Text(
+                          _getDisplayText(),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                            height: 1.3,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  
-                  const SizedBox(height: 12),
+                    
+                    const SizedBox(height: 8),
 
-                  // Response Text
-                  Text(
-                    _aiResponseText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                    // Response Text (1 line only)
+                    Container(
+                      height: 24, // Fixed height for 1 line
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Center(
+                        child: Text(
+                          _aiResponseText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
 
-            // 3. Live Bill Container
+            // 3. Live Bill Container (Takes remaining space - half page)
             Expanded(
               child: Container(
-                margin: EdgeInsets.fromLTRB(16, _isEditMode ? 10 : 20, 16, 16),
+                margin: const EdgeInsets.fromLTRB(16, 10, 16, 16),
                 decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
@@ -638,13 +694,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                               Row(
                                 children: [
                                   TextButton.icon(
-                                      onPressed: currentBill.isEmpty ? null : () {
-                                        billProvider.clearBill();
-                                        if (_isEditMode) {
-                                          _toggleEditMode();
-                                        }
-                                      },
-                                      icon: const Icon(Icons.cancel_outlined,
+                                      onPressed: _resetVoicePage, // Reset entire page
+                                      icon: const Icon(Icons.refresh,
                                           size: 18, color: Colors.red),
                                       label: const Text("Cancel Bill",
                                           style: TextStyle(

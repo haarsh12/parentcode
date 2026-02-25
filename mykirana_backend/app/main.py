@@ -6,8 +6,13 @@ from app.api import auth, items, voice, voice_inventory, sms_share, analytics
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Startup: Checking database connection...")
-    create_db_and_tables()
-    print("Startup: Database check complete.")
+    try:
+        create_db_and_tables()
+        print("✅ Database connected successfully!")
+    except Exception as e:
+        print(f"⚠️ Database connection failed: {str(e)[:100]}")
+        print("⚠️ Server will start but database operations will fail")
+        print("💡 TIP: Check DATABASE_CONNECTION_FIX.md for solutions")
     yield
     print("Shutdown: Closing connections...")
 
