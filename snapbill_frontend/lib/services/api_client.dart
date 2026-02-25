@@ -6,7 +6,7 @@ class ApiClient {
   // ⚠️ IMPORTANT: USE CORRECT IP
   // Emulator: "http://10.0.2.2:8000"
   // Real Phone: "http://192.168.1.X:8000" (Check your PC's IP)
-  static const String baseUrl = "http://10.84.59.207:8000";
+  static const String baseUrl = "http://10.28.43.207:8000";
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
     final url = Uri.parse('$baseUrl$endpoint');

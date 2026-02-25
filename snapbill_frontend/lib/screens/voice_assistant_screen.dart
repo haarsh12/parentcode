@@ -104,7 +104,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
   }
 
-  /// Start listening session - MANUAL CONTROL ONLY
+  /// Start listening session - CONTINUOUS MODE
   Future<void> _startListening() async {
     // Mute system beeps FIRST
     await _muteSystemSounds();
@@ -112,11 +112,23 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     bool available = await _speech.initialize(
       onError: (val) {
         debugPrint('🎤 STT Error: $val');
-        // DO NOT auto-restart - just log error
+        // Restart if still in listening mode
+        if (_isListening) {
+          debugPrint('🔄 Auto-restarting after error...');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (_isListening) _startSpeechRecognition();
+          });
+        }
       },
       onStatus: (status) {
         debugPrint('🎤 Status: $status');
-        // DO NOT auto-restart - user must manually tap to restart
+        // CRITICAL: Auto-restart when done to keep continuous listening
+        if (_isListening && (status == 'done' || status == 'notListening')) {
+          debugPrint('🔄 Auto-restarting to continue listening...');
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (_isListening) _startSpeechRecognition();
+          });
+        }
       },
     );
 
@@ -131,22 +143,34 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
 
       await _startSpeechRecognition();
       _startAudioLevelAnimation();
-      debugPrint('🎙️ Listening started - MANUAL CONTROL ONLY');
+      debugPrint('🎙️ CONTINUOUS Listening started - Will auto-restart');
     }
   }
 
-  /// Internal speech recognition start
+  /// Internal speech recognition start - TRUE CONTINUOUS MODE
   Future<void> _startSpeechRecognition() async {
-    await _speech.listen(
-      onResult: _handleSpeechResult,
-      listenMode: stt.ListenMode.dictation,
-      partialResults: true,
-      localeId: 'en_IN',
-      cancelOnError: false,
-      // CRITICAL: Disable timeouts completely
-      listenFor: const Duration(hours: 24), // Effectively infinite
-      pauseFor: const Duration(hours: 1),   // Allow very long pauses
-    );
+    if (!_isListening) return; // Safety check
+    
+    try {
+      await _speech.listen(
+        onResult: _handleSpeechResult,
+        listenMode: stt.ListenMode.confirmation, // More continuous than dictation
+        partialResults: true,
+        localeId: 'en_IN',
+        cancelOnError: false,
+        // Longer durations to minimize restarts
+        listenFor: const Duration(seconds: 120), // 2 minutes
+        pauseFor: const Duration(seconds: 30),   // 30 seconds pause allowed
+      );
+    } catch (e) {
+      debugPrint('❌ Listen error: $e');
+      // Retry if still in listening mode
+      if (_isListening) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (_isListening) _startSpeechRecognition();
+        });
+      }
+    }
   }
 
   /// Audio level animation for orb
@@ -173,7 +197,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     );
   }
 
-  /// Handle speech results
+  /// Handle speech results - ACCUMULATE on final result
   void _handleSpeechResult(result) {
     if (!_isListening) return;
 
@@ -181,13 +205,15 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       _currentSpeechChunk = result.recognizedWords;
     });
 
-    // If final result, accumulate it
+    // CRITICAL: Accumulate on final result to preserve all text
     if (result.finalResult && _currentSpeechChunk.isNotEmpty) {
       _accumulatedText += _currentSpeechChunk + ' ';
       setState(() {
         _currentSpeechChunk = '';
       });
       debugPrint('📝 Accumulated: $_accumulatedText');
+    } else {
+      debugPrint('📝 Current: $_currentSpeechChunk (final: ${result.finalResult})');
     }
   }
 
@@ -201,7 +227,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     // Unmute system sounds
     await _unmuteSystemSounds();
 
-    // Combine all text
+    // Get ALL text (accumulated + current chunk)
     final finalText = (_accumulatedText + ' ' + _currentSpeechChunk).trim();
 
     setState(() {
