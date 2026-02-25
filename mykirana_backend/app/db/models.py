@@ -39,7 +39,7 @@ class Item(TimestampModel, table=True):
     # This replaces the old 'name' and 'hindi_name' fields
     names: str  # JSON string containing array of names
     
-    category: str = Field(index=True)     # e.g., "Anaj", "Dal", "Masale"
+    category: str = Field(index=True)     # e.g., "Anaaj", "Dal", "Masale"
     price: float                          # e.g., 0.0 (unset) or 45.0 (set by user)
     unit: str                             # e.g., "kg", "litre", "plate"
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")

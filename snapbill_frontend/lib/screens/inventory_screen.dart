@@ -21,7 +21,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   bool _selectAll = false;
 
   final List<String> _categories = [
-    'Anaj',
+    'Anaaj',
     'Atta',
     'Dal',
     'Masale',

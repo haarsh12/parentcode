@@ -57,20 +57,20 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
-  image_path: "assets/mykiranaicon.png"
+  image_path: "assets/Vyamit_AI.png"
   min_sdk_android: 21
   web:
     generate: true
-    image_path: "assets/mykiranaicon.png"
-    background_color: "#E8F5E9"
-    theme_color: "#1B5E20"
+    image_path: "assets/Vyamit_AI.png"
+    background_color: "#FFFFFF"
+    theme_color: "#C6E377"
   windows:
     generate: true
-    image_path: "assets/mykiranaicon.png"
+    image_path: "assets/Vyamit_AI.png"
     icon_size: 48
   macos:
     generate: true
-    image_path: "assets/mykiranaicon.png"
+    image_path: "assets/Vyamit_AI.png"
 
 flutter:
   uses-material-design: true
@@ -80,6 +80,7 @@ flutter:
     - assets/
     - assets/geminigrocery.png
     - assets/mykiranaicon.png
+    - assets/Vyamit_AI.png
     # NEW: Images for authentication screens
     - assets/images/
     - assets/images/undraw_shopping_a55o.png

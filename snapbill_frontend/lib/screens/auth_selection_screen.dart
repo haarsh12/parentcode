@@ -26,7 +26,7 @@ class AuthSelectionScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               const Text(
-                "Welcome to Snapbill",
+                "Welcome to Vyamit AI",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 28,

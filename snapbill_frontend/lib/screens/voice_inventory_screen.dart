@@ -22,10 +22,12 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
   
   bool _isListening = false;
   bool _isProcessing = false;
-  String _currentSpeechChunk = '';
+  String _accumulatedText = ""; // Accumulated text during session
+  String _currentSpeechChunk = ""; // Live chunk
   String _rawText = '';
   List<ParsedCategory> _parsedCategories = [];
-  Timer? _silenceTimer;
+  Timer? _audioLevelTimer;
+  double _audioLevel = 0.0;
   
   final VoiceInventoryService _service = VoiceInventoryService();
 
@@ -39,7 +41,8 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
   @override
   void dispose() {
     _pulseController.dispose();
-    _silenceTimer?.cancel();
+    _audioLevelTimer?.cancel();
+    _speech.stop();
     super.dispose();
   }
 
@@ -52,67 +55,154 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
     )..repeat(reverse: true);
   }
 
+  /// Get display text (scrolling effect)
+  String _getDisplayText() {
+    final fullText = (_accumulatedText + ' ' + _currentSpeechChunk).trim();
+    
+    if (fullText.isEmpty) {
+      return _isListening ? "Listening..." : "Tap to Speak";
+    }
+    
+    return fullText;
+  }
+
   void _toggleListening() async {
     if (_isListening) {
-      _stopListening();
+      await _stopListeningAndProcess();
     } else {
-      _pulseController.forward();
-      setState(() {
-        _isListening = true;
-      });
-      _startListening();
+      await _startListening();
     }
   }
 
-  void _startListening() async {
+  /// Start continuous listening
+  Future<void> _startListening() async {
     bool available = await _speech.initialize(
       onError: (val) {
-        debugPrint('STT Error: $val');
-        // Stop listening on error to prevent loop
+        debugPrint('🎤 STT Error: $val');
         if (_isListening) {
-          _stopListening();
+          debugPrint('🔄 Auto-restarting after error...');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (_isListening) _startSpeechRecognition();
+          });
         }
       },
       onStatus: (status) {
-        debugPrint('STT Status: $status');
-        // Don't auto-restart - let user manually tap again
+        debugPrint('🎤 Status: $status');
+        if (_isListening && (status == 'done' || status == 'notListening')) {
+          debugPrint('🔄 Auto-restarting to continue listening...');
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (_isListening) _startSpeechRecognition();
+          });
+        }
       },
     );
 
     if (available) {
-      _speech.listen(
-        onResult: (val) {
-          setState(() => _currentSpeechChunk = val.recognizedWords);
-          _silenceTimer?.cancel();
-          _silenceTimer = Timer(const Duration(seconds: 2), () {
-            if (_currentSpeechChunk.trim().isNotEmpty) {
-              _speech.stop();
-              _processVoiceInput(_currentSpeechChunk);
-              setState(() {
-                _rawText = _currentSpeechChunk;
-                _currentSpeechChunk = '';
-                _isListening = false;
-              });
-              _pulseController.stop();
-            }
-          });
-        },
-        localeId: 'en_IN',
-        listenMode: stt.ListenMode.dictation,
-        partialResults: true,
-      );
+      setState(() {
+        _isListening = true;
+        _accumulatedText = "";
+        _currentSpeechChunk = "";
+        _audioLevel = 0.3;
+      });
+
+      await _startSpeechRecognition();
+      _startAudioLevelAnimation();
+      debugPrint('🎙️ CONTINUOUS Listening started');
     }
   }
 
-  void _stopListening() {
-    _speech.stop();
-    _silenceTimer?.cancel();
-    _pulseController.stop();
-    setState(() => _isListening = false);
+  /// Internal speech recognition start
+  Future<void> _startSpeechRecognition() async {
+    if (!_isListening) return;
+    
+    try {
+      await _speech.listen(
+        onResult: _handleSpeechResult,
+        listenMode: stt.ListenMode.confirmation,
+        partialResults: true,
+        localeId: 'en_IN',
+        cancelOnError: false,
+        listenFor: const Duration(seconds: 120),
+        pauseFor: const Duration(seconds: 30),
+      );
+    } catch (e) {
+      debugPrint('❌ Listen error: $e');
+      if (_isListening) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (_isListening) _startSpeechRecognition();
+        });
+      }
+    }
+  }
+
+  /// Audio level animation
+  void _startAudioLevelAnimation() {
+    _audioLevelTimer?.cancel();
+    
+    _audioLevelTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (timer) {
+        if (!_isListening) {
+          timer.cancel();
+          return;
+        }
+        
+        setState(() {
+          if (_currentSpeechChunk.isNotEmpty) {
+            _audioLevel = 0.6 + (0.4 * (timer.tick % 10) / 10);
+          } else {
+            _audioLevel = 0.3 + (0.2 * (timer.tick % 10) / 10);
+          }
+        });
+      },
+    );
+  }
+
+  /// Handle speech results
+  void _handleSpeechResult(result) {
+    if (!_isListening) return;
+
+    setState(() {
+      _currentSpeechChunk = result.recognizedWords;
+    });
+
+    if (result.finalResult && _currentSpeechChunk.isNotEmpty) {
+      _accumulatedText += _currentSpeechChunk + ' ';
+      setState(() {
+        _currentSpeechChunk = '';
+      });
+      debugPrint('📝 Accumulated: $_accumulatedText');
+    }
+  }
+
+  /// Stop and process
+  Future<void> _stopListeningAndProcess() async {
+    if (!_isListening) return;
+
+    await _speech.stop();
+    _audioLevelTimer?.cancel();
+
+    final finalText = (_accumulatedText + ' ' + _currentSpeechChunk).trim();
+
+    setState(() {
+      _isListening = false;
+      _accumulatedText = '';
+      _currentSpeechChunk = '';
+      _audioLevel = 0.0;
+    });
+
+    debugPrint('🛑 Stopped. Final text: $finalText');
+
+    if (finalText.isNotEmpty) {
+      await _processVoiceInput(finalText);
+    }
   }
 
   Future<void> _processVoiceInput(String text) async {
-    setState(() => _isProcessing = true);
+    setState(() {
+      _isProcessing = true;
+      _rawText = text;
+    });
     
     try {
       final result = await _service.parseVoiceInventory(text);
@@ -236,11 +326,11 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Light blurred background (not black)
+          // Lighter blurred background
           BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
             child: Container(
-              color: Colors.white.withOpacity(0.3),
+              color: Colors.black.withOpacity(0.2), // Much lighter
             ),
           ),
           
@@ -289,64 +379,55 @@ class _VoiceInventoryScreenState extends State<VoiceInventoryScreen>
                     ),
                   ),
                   
-                  // Voice Button (exact copy from voice assistant)
+                  // Voice Button - Green pulsing circle
                   if (_parsedCategories.isEmpty)
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: 20),
-                        GestureDetector(
-                          onTap: _toggleListening,
-                          child: AnimatedBuilder(
-                            animation: _pulseController,
-                            builder: (context, child) {
-                              return Transform.scale(
-                                scale: _isListening ? _pulseController.value : 1.0,
-                                child: Container(
-                                  height: 120,
-                                  width: 120,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _isListening
-                                        ? AppColors.primaryGreen
-                                        : Colors.white,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: _isListening
-                                            ? AppColors.primaryGreen.withOpacity(0.5)
-                                            : Colors.black12,
-                                        blurRadius: 30,
-                                        spreadRadius: 5,
-                                      ),
-                                    ],
-                                    border: Border.all(
-                                      color: _isListening
-                                          ? Colors.transparent
-                                          : Colors.grey.shade300,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    _isListening
-                                        ? Icons.graphic_eq
-                                        : Icons.mic_none_rounded,
-                                    size: 50,
-                                    color: _isListening ? Colors.white : Colors.black,
-                                  ),
+                        AnimatedScale(
+                          scale: _isListening ? 1.0 + (_audioLevel * 0.2) : 1.0,
+                          duration: const Duration(milliseconds: 100),
+                          child: GestureDetector(
+                            onTap: _toggleListening,
+                            child: Container(
+                              height: 120,
+                              width: 120,
+                              decoration: BoxDecoration(
+                                color: _isListening ? AppColors.primaryGreen : Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _isListening ? Colors.transparent : Colors.grey.shade300,
+                                  width: 2,
                                 ),
-                              );
-                            },
+                                boxShadow: [
+                                  if (_isListening)
+                                    BoxShadow(
+                                      color: AppColors.primaryGreen.withOpacity(0.5),
+                                      blurRadius: 30,
+                                      spreadRadius: 5,
+                                    )
+                                  else
+                                    const BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                ],
+                              ),
+                              child: Icon(
+                                _isListening ? Icons.graphic_eq : Icons.mic,
+                                size: 50,
+                                color: _isListening ? Colors.white : Colors.black,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 15),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Text(
-                            _isListening
-                                ? (_currentSpeechChunk.isEmpty
-                                    ? "Listening..."
-                                    : _currentSpeechChunk)
-                                : "Tap to Speak",
+                            _getDisplayText(),
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             style: const TextStyle(fontSize: 14, color: Colors.grey),

@@ -46,7 +46,7 @@ class _BillShareModalState extends State<BillShareModal> {
     final buffer = StringBuffer();
     
     // Header with real shop details
-    buffer.writeln('🧾 *SNAPBILL RECEIPT*');
+    buffer.writeln('🧾 *VYAMIT AI RECEIPT*');
     buffer.writeln('');
     buffer.writeln('*${widget.shopDetails.shopName.toUpperCase()}*');
     buffer.writeln(widget.shopDetails.address);
@@ -92,7 +92,7 @@ class _BillShareModalState extends State<BillShareModal> {
     buffer.writeln('--------------------------------');
     buffer.writeln('');
     buffer.writeln('🙏 Thank you! Visit Again');
-    buffer.writeln('⚡ Powered by SnapBill');
+    buffer.writeln('⚡ Powered by Vyamit AI');
 
     return buffer.toString();
   }

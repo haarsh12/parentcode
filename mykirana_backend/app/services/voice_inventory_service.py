@@ -70,12 +70,12 @@ RULES:
 3. If no category mentioned, use "Other"
 4. Normalize units: kilo→kg, litre→litre, plate→plate
 
-EXAMPLE INPUT: "category anaj gehun 25 rs kilo, bajra 30 rupees kg"
+EXAMPLE INPUT: "category anaaj gehun 25 rs kilo, bajra 30 rupees kg"
 EXAMPLE OUTPUT:
 {{
   "categories": [
     {{
-      "name": "Anaj",
+      "name": "Anaaj",
       "items": [
         {{"name": "Gehun", "price": 25, "unit": "kg", "is_existing": false, "aliases": ["गेहूं", "Wheat"]}},
         {{"name": "Bajra", "price": 30, "unit": "kg", "is_existing": false, "aliases": ["बाजरा", "Pearl Millet"]}}

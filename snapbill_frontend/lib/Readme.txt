@@ -131,7 +131,7 @@ price (double): Cost per unit.
 
 unit (String): Unit of measurement (kg, plate, packet).
 
-category (String): Grouping key (Anaj, Masale).
+category (String): Grouping key (Anaaj, Masale).
 
 toJson(): Converts object to Map for API transmission.
 

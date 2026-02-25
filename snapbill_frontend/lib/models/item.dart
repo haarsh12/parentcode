@@ -3,7 +3,7 @@ class Item {
   final List<String> names; // ["Rice", "Chawal", "Tandul"]
   final double price;
   final String unit; // "kg", "pkt"
-  final String category; // "Anaj", "Masale"
+  final String category; // "Anaaj", "Masale"
 
   Item({
     required this.id,
@@ -37,3 +37,4 @@ class Item {
     };
   }
 }
+

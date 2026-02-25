@@ -10,7 +10,7 @@ class InventoryProvider with ChangeNotifier {
   
   // Predefined categories that persist even when empty
   List<String> _categories = [
-    'Anaj',
+    'Anaaj',
     'Atta',
     'Dal',
     'Masale',
@@ -21,7 +21,7 @@ class InventoryProvider with ChangeNotifier {
   ];
 
   bool _isLoading = false;
-  String _selectedCategory = 'Anaj';
+  String _selectedCategory = 'Anaaj';
 
   List<Item> get items => _items;
   List<String> get categories => _categories;

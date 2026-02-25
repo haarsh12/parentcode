@@ -123,7 +123,7 @@ class PrinterService {
             children: [
               // --- 1. BRANDING & HEADER ---
               pw.Center(
-                  child: pw.Text("SNAPBILL",
+                  child: pw.Text("VYAMIT AI",
                       style: pw.TextStyle(
                           fontSize: 10,
                           fontWeight: pw.FontWeight.bold,
@@ -330,7 +330,7 @@ class PrinterService {
                 ]),
               
               pw.Center(
-                  child: pw.Text("Powered by SnapBill",
+                  child: pw.Text("Powered by Vyamit AI",
                       style: const pw.TextStyle(
                           fontSize: 10, color: PdfColors.grey600))),
               pw.SizedBox(height: 20),

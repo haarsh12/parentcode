@@ -2,79 +2,79 @@ import '../models/item.dart';
 
 // The FULL list from your original app - ALL PRICES SET TO 0.0
 final List<Item> masterInventoryList = [
-  // Anaj (Grains)
+  // Anaaj (Grains)
   Item(
       id: '101',
       names: ['Chawal', 'Rice', 'चावल', 'तांदूळ'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '102',
       names: ['Basmati Chawal', 'Basmati Rice', 'बासमती चावल'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '103',
       names: ['Gehun', 'Wheat', 'गेहूँ', 'गहू'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '104',
       names: ['Bajra', 'Pearl Millet', 'बाजरा', 'बाजरी'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '105',
       names: ['Jowar', 'Sorghum', 'ज्वार'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '106',
       names: ['Ragi', 'Nachni', 'Finger millet'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '107',
       names: ['Makka', 'Corn grain', 'मक्का'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '108',
       names: ['Poha', 'Flattened rice', 'पोहा'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '109',
       names: ['Bhagar', 'Varai', 'Upvas rice'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '110',
       names: ['Sabudana', 'Tapioca Pearls', 'साबूदाना'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '111',
       names: ['Suji', 'Rawa', 'Semolina'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
   Item(
       id: '112',
       names: ['Daliya', 'Broken Wheat', 'दलिया'],
       price: 0.0,
       unit: 'kg',
-      category: 'Anaj'),
+      category: 'Anaaj'),
 
   // Atta (Flour)
   Item(
@@ -468,3 +468,5 @@ final List<Item> masterFrequentList = [
       unit: 'bottle',
       category: 'Beverages'),
 ];
+
+
