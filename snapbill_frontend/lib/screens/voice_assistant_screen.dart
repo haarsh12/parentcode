@@ -656,26 +656,35 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                     
                     const SizedBox(height: 15),
                     
-                    // Speech Text
-                    Text(
-                      _getDisplayText(),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
+                    // Speech Text - SINGLE LINE with fixed height
+                    SizedBox(
+                      height: 20,
+                      child: Text(
+                        _getDisplayText(),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                     
                     const SizedBox(height: 8),
 
-                    // Response Text
-                    Text(
-                      _aiResponseText,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    // Response Text - SINGLE LINE with fixed height
+                    SizedBox(
+                      height: 24,
+                      child: Text(
+                        _aiResponseText,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],

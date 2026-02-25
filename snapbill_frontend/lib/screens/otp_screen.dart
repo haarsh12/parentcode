@@ -108,8 +108,14 @@ class _OtpScreenState extends State<OtpScreen> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                "Verification Failed: ${e.toString().replaceAll('Exception:', '')}")),
+          content: Text(
+            e.toString().replaceAll('Exception:', '').trim(),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
       );
     }
   }

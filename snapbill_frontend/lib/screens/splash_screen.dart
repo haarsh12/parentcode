@@ -81,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen>
                 return Transform.translate(
                   offset: Offset(0, _animation.value),
                   child: Container(
-                    padding: const EdgeInsets.all(30),
+                    padding: const EdgeInsets.all(20),
                     decoration: const BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
@@ -92,16 +92,20 @@ class _SplashScreenState extends State<SplashScreen>
                             spreadRadius: 5)
                       ],
                     ),
-                    // Use an Icon if image fails, or your asset
-                    child: const Icon(Icons.store_rounded,
-                        size: 80, color: AppColors.primaryGreen),
+                    // Use new Vyamit AI logo
+                    child: Image.asset(
+                      'assets/Vyamit_AI.png',
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 );
               },
             ),
             const SizedBox(height: 40),
             const Text(
-              "My Kirana",
+              "Vyamit AI",
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
@@ -111,7 +115,7 @@ class _SplashScreenState extends State<SplashScreen>
             ),
             const SizedBox(height: 20),
             const Text(
-              "AI Powered Shop Manager",
+              "AI Powered Billing Assistant",
               style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey,

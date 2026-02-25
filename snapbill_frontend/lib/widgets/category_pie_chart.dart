@@ -48,14 +48,16 @@ class CategoryPieChart extends StatelessWidget {
     }
 
     final colors = [
-      const Color(0xFF81C784), // Light green
-      const Color(0xFF64B5F6), // Light blue
-      const Color(0xFFFFB74D), // Light orange
-      const Color(0xFFBA68C8), // Light purple
-      const Color(0xFFE57373), // Light red
-      const Color(0xFF4DB6AC), // Light teal
-      const Color(0xFFFFD54F), // Light amber
-      const Color(0xFF9575CD), // Light indigo
+      const Color(0xFF4CAF50), // Vibrant green
+      const Color(0xFF2196F3), // Vibrant blue
+      const Color(0xFFFF9800), // Vibrant orange
+      const Color(0xFF9C27B0), // Vibrant purple
+      const Color(0xFFF44336), // Vibrant red
+      const Color(0xFF00BCD4), // Vibrant cyan
+      const Color(0xFFFFEB3B), // Vibrant yellow
+      const Color(0xFF673AB7), // Vibrant deep purple
+      const Color(0xFFE91E63), // Vibrant pink
+      const Color(0xFF009688), // Vibrant teal
     ];
 
     return Container(
