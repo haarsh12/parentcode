@@ -607,69 +607,85 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                   ]),
             ),
 
-            // 2. Siri-Style Voice Orb Section (Compact, Upper Position)
+            // 2. Voice Circle - Simple green pulsing
             if (!_isEditMode)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Siri Wave Orb (Slightly smaller)
-                    SiriWaveOrb(
-                      isActive: _isListening,
-                      audioLevel: _audioLevel,
-                      onTap: _toggleListening,
-                      size: 160,
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Live Speech Text (2 lines max, scrolling effect)
-                    Container(
-                      height: 48, // Fixed height for 2 lines
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Center(
-                        child: Text(
-                          _getDisplayText(),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                            height: 1.3,
+                    // Green Pulsing Circle
+                    AnimatedScale(
+                      scale: _isListening ? 1.0 + (_audioLevel * 0.2) : 1.0,
+                      duration: const Duration(milliseconds: 100),
+                      child: GestureDetector(
+                        onTap: _toggleListening,
+                        child: Container(
+                          height: 120,
+                          width: 120,
+                          decoration: BoxDecoration(
+                            color: _isListening ? AppColors.primaryGreen : Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _isListening ? Colors.transparent : Colors.grey.shade300,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              if (_isListening)
+                                BoxShadow(
+                                  color: AppColors.primaryGreen.withOpacity(0.5),
+                                  blurRadius: 30,
+                                  spreadRadius: 5,
+                                )
+                              else
+                                const BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                            ],
+                          ),
+                          child: Icon(
+                            _isListening ? Icons.graphic_eq : Icons.mic,
+                            size: 50,
+                            color: _isListening ? Colors.white : Colors.black,
                           ),
                         ),
                       ),
                     ),
                     
+                    const SizedBox(height: 15),
+                    
+                    // Speech Text
+                    Text(
+                      _getDisplayText(),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    
                     const SizedBox(height: 8),
 
-                    // Response Text (1 line only)
-                    Container(
-                      height: 24, // Fixed height for 1 line
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Center(
-                        child: Text(
-                          _aiResponseText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    // Response Text
+                    Text(
+                      _aiResponseText,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
 
-            // 3. Live Bill Container (Takes remaining space - half page)
+            // 3. Live Bill Container (Takes remaining space)
             Expanded(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                margin: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                 decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
