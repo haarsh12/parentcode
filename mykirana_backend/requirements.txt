@@ -1,26 +1,26 @@
-# Core Framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+# Core Framework - versions with pre-built wheels (no Rust compilation on Render)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18
 
 # Database
-sqlmodel==0.0.14
-psycopg2-binary==2.9.9
+sqlmodel==0.0.24
+psycopg2-binary==2.9.10
 
 # Environment & Configuration
-python-dotenv==1.0.0
+python-dotenv==1.0.1
 
 # HTTP Requests
-requests==2.31.0
-httpx==0.26.0
+requests==2.32.3
+httpx==0.28.1
 
 # AI/ML
-google-generativeai==0.3.2
+google-generativeai==0.8.6
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# Utilities
-pydantic==2.5.3
-pydantic-settings==2.1.0
+# Pydantic - use versions with pre-built wheels (avoids Rust build on Render)
+pydantic==2.10.4
+pydantic-settings==2.6.1

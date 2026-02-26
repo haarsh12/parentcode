@@ -49,6 +49,6 @@ class ItemUpdate(ItemBase):
     pass
 
 class ItemResponse(ItemBase):
-    id: int  # Database auto-generated ID
+    id: str  # master_id - frontend identifier (e.g. "101", "FB1")
     owner_id: int
-    master_id: str  # ADDED: Store the frontend master list ID
+    master_id: str
