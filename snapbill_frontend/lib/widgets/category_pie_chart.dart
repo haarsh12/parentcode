@@ -59,6 +59,12 @@ class CategoryPieChart extends StatelessWidget {
       const Color(0xFFE91E63), // Vibrant pink
       const Color(0xFF009688), // Vibrant teal
     ];
+    
+    // Calculate total sales for percentage calculation
+    final totalSales = categories.fold<double>(
+      0, 
+      (sum, cat) => sum + cat.totalSales
+    );
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -92,9 +98,13 @@ class CategoryPieChart extends StatelessWidget {
                 sections: categories.asMap().entries.map((entry) {
                   final index = entry.key;
                   final cat = entry.value;
+                  // Calculate actual percentage from total sales
+                  final actualPercentage = totalSales > 0 
+                      ? (cat.totalSales / totalSales * 100) 
+                      : 0.0;
                   return PieChartSectionData(
-                    value: cat.percentage,
-                    title: '${cat.percentage.toStringAsFixed(0)}%',
+                    value: cat.totalSales, // Use actual sales value, not percentage
+                    title: '${actualPercentage.toStringAsFixed(0)}%',
                     color: colors[index % colors.length],
                     radius: 50,
                     titleStyle: const TextStyle(
@@ -116,6 +126,9 @@ class CategoryPieChart extends StatelessWidget {
             children: categories.asMap().entries.map((entry) {
               final index = entry.key;
               final cat = entry.value;
+              final actualPercentage = totalSales > 0 
+                  ? (cat.totalSales / totalSales * 100) 
+                  : 0.0;
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -129,7 +142,7 @@ class CategoryPieChart extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    cat.category,
+                    '${cat.category} (${actualPercentage.toStringAsFixed(0)}%)',
                     style: const TextStyle(fontSize: 10),
                   ),
                 ],
