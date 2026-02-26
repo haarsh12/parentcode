@@ -59,6 +59,21 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
 
   // Standard units for the dropdown
   final List<String> _unitOptions = ['kg', 'pics', 'dozen', 'plate', 'other'];
+  
+  // Category Management
+  List<String> _categories = [
+    'Pizza',
+    'Burger',
+    'Snacks',
+    'Noodles',
+    'Cakes',
+    'Beverages',
+    'Ice Cream',
+    'Sandwiches',
+    'Rolls',
+    'Chinese',
+  ];
+  String _selectedCategory = 'Pizza';
 
   void _handleItemTap(Item item) {
     setState(() {
@@ -196,6 +211,11 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
         customUnitController.text = item.unit;
       }
     }
+    
+    // Category Logic
+    String selectedCategory = isEdit ? item.category : _selectedCategory;
+    final customCategoryController = TextEditingController();
+    bool isCustomCategory = false;
 
     showDialog(
       context: context,
@@ -206,6 +226,33 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Category Dropdown
+                DropdownButtonFormField<String>(
+                  value: _categories.contains(selectedCategory) ? selectedCategory : _categories[0],
+                  decoration: const InputDecoration(labelText: "Category"),
+                  isExpanded: true,
+                  items: [
+                    ..._categories.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                    const DropdownMenuItem(value: '__NEW__', child: Text('+ New Category')),
+                  ],
+                  onChanged: (val) {
+                    setDialogState(() {
+                      selectedCategory = val!;
+                      isCustomCategory = (val == '__NEW__');
+                    });
+                  },
+                ),
+                if (isCustomCategory) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: customCategoryController,
+                    decoration: const InputDecoration(
+                      labelText: "New Category Name",
+                      hintText: "e.g., Desserts, Drinks",
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(labelText: "Item Name"),
@@ -291,13 +338,26 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                       finalUnit = customUnitController.text.trim();
                       if (finalUnit.isEmpty) finalUnit = 'unit'; // Fallback
                     }
+                    
+                    // Determine final category
+                    String finalCategory = selectedCategory;
+                    if (isCustomCategory && customCategoryController.text.trim().isNotEmpty) {
+                      finalCategory = customCategoryController.text.trim();
+                      // Add new category to list
+                      if (!_categories.contains(finalCategory)) {
+                        setState(() {
+                          _categories.add(finalCategory);
+                          _selectedCategory = finalCategory;
+                        });
+                      }
+                    }
 
                     final newItem = Item(
                       id: idController.text,
                       names: [nameController.text],
                       price: double.tryParse(priceController.text) ?? 0,
                       unit: finalUnit,
-                      category: 'Frequent',
+                      category: finalCategory,
                     );
 
                     isEdit ? widget.onEdit(newItem) : widget.onAdd(newItem);
@@ -444,6 +504,113 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
         fullscreenDialog: true,
       ),
     );
+  }
+  
+  void _showAddCategoryDialog() {
+    final categoryNameCtrl = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Add New Category"),
+        content: TextField(
+          controller: categoryNameCtrl,
+          decoration: const InputDecoration(
+            labelText: "Category Name",
+            hintText: "e.g., Desserts, Drinks",
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (categoryNameCtrl.text.trim().isNotEmpty) {
+                setState(() {
+                  _categories.add(categoryNameCtrl.text.trim());
+                  _selectedCategory = categoryNameCtrl.text.trim();
+                });
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Category '${categoryNameCtrl.text.trim()}' added"),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Add"),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showDeleteCategoryDialog(String categoryName) {
+    final itemCount = widget.frequentItems.where((i) => i.category == categoryName).length;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Category"),
+        content: Text(
+          itemCount > 0
+              ? "Are you sure you want to delete '$categoryName'? This will remove $itemCount item(s)."
+              : "Are you sure you want to delete '$categoryName'?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Delete all items in this category
+              final itemsToDelete = widget.frequentItems
+                  .where((i) => i.category == categoryName)
+                  .toList();
+              
+              for (var item in itemsToDelete) {
+                widget.onDelete(item.id);
+              }
+              
+              setState(() {
+                _categories.remove(categoryName);
+                if (_selectedCategory == categoryName && _categories.isNotEmpty) {
+                  _selectedCategory = _categories.first;
+                }
+              });
+              
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Category '$categoryName' deleted"),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  List<Item> _getFilteredItems() {
+    return widget.frequentItems
+        .where((item) => item.category == _selectedCategory)
+        .toList();
   }
 
   @override
@@ -823,6 +990,93 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
             ),
           ),
 
+          // --- CATEGORY BAR ---
+          if (!_isEditMode)
+            Container(
+              height: 60,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categories.length + 1,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  // Add Category button at the end
+                  if (index == _categories.length) {
+                    return GestureDetector(
+                      onTap: _showAddCategoryDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primaryGreen.withOpacity(0.5)),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.add, size: 22, color: AppColors.primaryGreen),
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  final cat = _categories[index];
+                  final isSelected = _selectedCategory == cat;
+                  final itemCount = widget.frequentItems.where((i) => i.category == cat).length;
+                  
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedCategory = cat;
+                      });
+                    },
+                    onLongPress: () => _showDeleteCategoryDialog(cat),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primaryGreen : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primaryGreen : Colors.grey.shade300,
+                        ),
+                        boxShadow: isSelected ? [
+                          BoxShadow(
+                            color: AppColors.primaryGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          )
+                        ] : null,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            cat,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$itemCount items',
+                            style: TextStyle(
+                              color: isSelected ? Colors.white.withOpacity(0.8) : Colors.grey,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          
+          const SizedBox(height: 10),
+
           // --- BOTTOM SECTION: GRID ---
           if (!_isEditMode)
             Expanded(
@@ -837,9 +1091,9 @@ class _FrequentBillingScreenState extends State<FrequentBillingScreen> {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
-                itemCount: widget.frequentItems.length,
+                itemCount: _getFilteredItems().length,
                 itemBuilder: (context, index) {
-                  final item = widget.frequentItems[index];
+                  final item = _getFilteredItems()[index];
                   final count = _itemCounts[item.id] ?? 0;
                   final isSelected = count > 0;
                   return GestureDetector(
