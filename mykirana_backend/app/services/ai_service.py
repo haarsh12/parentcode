@@ -149,13 +149,24 @@ CRITICAL RULES FOR PRICE HANDLING:
    - Use inventory price
    - Calculate total correctly
 
-3. If item NOT in inventory AND user did NOT mention price:
+3. IMPORTANT - PARTIAL ITEMS HANDLING:
+   - If user mentions MULTIPLE items and ONE item has missing price:
+     * Add ALL items with known prices to "items" array
+     * Ask about the missing price in "msg"
+     * Return type: "BILL" (NOT "ERROR")
+   - Example: User says "1kg chawal aur aam"
+     * Chawal is in inventory → Add to items
+     * Aam is not in inventory → Ask in msg
+     * Return: {{"type": "BILL", "items": [{{"name": "Chawal", ...}}], "msg": "Chawal add kar diya. Aam ki keemat kya hai?"}}
+
+4. If ONLY ONE item mentioned AND it's not in inventory AND no price given:
    - Ask: "[Item name] ki keemat kya hai?"
-   - Return type: "ERROR" with this message
+   - Return type: "ERROR" with empty items array
+   - Return this message
 
-4. Match quantities correctly (1 kg, 2 litre, 5 pieces, etc.)
+5. Match quantities correctly (1 kg, 2 litre, 5 pieces, etc.)
 
-5. For greetings (hi, hello, namaste):
+6. For greetings (hi, hello, namaste):
    - Respond warmly in Hinglish
    - Return type: "GREETING"
 
@@ -173,10 +184,11 @@ if everything is fine with quantity, price and item and you have no questions th
 EXAMPLES:
 - User: "customer raju charde 5rs wali 6 maggie packet" → {{"type": "BILL", "customer_name": "Raju Charde", "items": [{{"name": "Maggie", "qty_display": "6pic", "rate": 5.0, "total": 30.0, "unit": "pic"}}], "msg": "Raju Charde ke liye 6 Maggie packet bill mein add kar diya"}}
 - User: "1kg chawal 120 rs kilo" → {{"type": "BILL", "customer_name": "Walk-in", "items": [{{"name": "Chawal", "qty_display": "1kg", "rate": 120.0, "total": 120.0, "unit": "kg"}}], "msg": "Saaman Bill mein jod diya gaya hai"}}
+- User: "1kg chawal aur aam" → {{"type": "BILL", "customer_name": "Walk-in", "items": [{{"name": "Chawal", "qty_display": "1kg", "rate": 50.0, "total": 50.0, "unit": "kg"}}], "msg": "Chawal add kar diya. Aam ki keemat kya hai?"}}
 - User: "hello" → {{"type": "GREETING", "customer_name": "Walk-in", "items": [], "msg": "Namaste! Main Vyamit AI hoon. Kaise madad kar sakti hoon?"}}
 - User: "pichla bill kitne ka tha?" → {{"type": "QUERY", "customer_name": "Walk-in", "items": [], "msg": "Aapka pichla bill ₹250 ka tha"}}
 - User: "business tips do" → {{"type": "QUERY", "customer_name": "Walk-in", "items": [], "msg": "Aapke data ke hisaab se: Chawal sabse zyada bikta hai, stock maintain rakhein. Shaam 5-8 baje peak time hai, us waqt ready rahein."}}
-- User: "aam" (not in inventory, no price) → {{"type": "ERROR", "customer_name": "Walk-in", "items": [], "msg": "Aam ki keemat kya hai?"}}"""
+- User: "aam" (ONLY aam, not in inventory, no price) → {{"type": "ERROR", "customer_name": "Walk-in", "items": [], "msg": "Aam ki keemat kya hai?"}}"""
 
         # AUTO-DISCOVERY LOOP
         last_error = ""

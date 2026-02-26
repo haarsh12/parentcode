@@ -152,7 +152,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
   }
 
-  /// Start listening session - CONTINUOUS MODE
+  /// Start listening session - MANUAL CONTROL
   Future<void> _startListening() async {
     // Mute system beeps FIRST
     await _muteSystemSounds();
@@ -160,86 +160,95 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     // Initialize speech if not already done
     bool available = await _speech.initialize(
       onError: (val) {
-        debugPrint('🎤 STT Error: $val');
-        // Only restart if still in listening mode and not a permission error
-        if (_isListening && !val.errorMsg.toLowerCase().contains('permission')) {
-          debugPrint('🔄 Auto-restarting after error...');
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (_isListening && mounted) _startSpeechRecognition();
-          });
-        } else if (val.errorMsg.toLowerCase().contains('permission')) {
+        debugPrint('🎤 STT Error: ${val.errorMsg}');
+        // Only handle permission errors, don't auto-restart
+        if (val.errorMsg.toLowerCase().contains('permission')) {
           debugPrint('❌ Permission denied - stopping');
-          setState(() {
-            _isListening = false;
-            _aiResponseText = "Microphone permission denied";
-            _audioLevel = 0.0;
-          });
+          if (mounted) {
+            setState(() {
+              _isListening = false;
+              _aiResponseText = "Microphone permission denied";
+              _audioLevel = 0.0;
+            });
+          }
           _unmuteSystemSounds();
         }
       },
       onStatus: (status) {
         debugPrint('🎤 Status: $status');
-        // CRITICAL: Auto-restart when done to keep continuous listening
-        if (_isListening && (status == 'done' || status == 'notListening')) {
-          debugPrint('🔄 Auto-restarting to continue listening...');
+        // SIMPLE: Only restart if session ends naturally while user wants to keep listening
+        if (_isListening && status == 'done' && mounted) {
+          debugPrint('🔄 Session ended - Restarting to continue listening...');
           Future.delayed(const Duration(milliseconds: 300), () {
-            if (_isListening && mounted) _startSpeechRecognition();
+            if (_isListening && mounted && !_speech.isListening) {
+              _startSpeechRecognition();
+            }
           });
         }
       },
     );
 
     if (available) {
-      setState(() {
-        _isListening = true;
-        _accumulatedText = "";
-        _currentSpeechChunk = "";
-        _aiResponseText = "Listening...";
-        _audioLevel = 0.3;
-      });
+      if (mounted) {
+        setState(() {
+          _isListening = true;
+          _accumulatedText = "";
+          _currentSpeechChunk = "";
+          _aiResponseText = "Listening...";
+          _audioLevel = 0.3;
+        });
+      }
 
       await _startSpeechRecognition();
       _startAudioLevelAnimation();
-      debugPrint('🎙️ CONTINUOUS Listening started - Will auto-restart');
+      debugPrint('🎙️ Listening started - Tap again to stop');
     } else {
       debugPrint('❌ Speech recognition not available');
-      setState(() {
-        _aiResponseText = "Speech recognition not available";
-      });
+      if (mounted) {
+        setState(() {
+          _aiResponseText = "Speech recognition not available";
+        });
+      }
       await _unmuteSystemSounds();
     }
   }
 
-  /// Internal speech recognition start - TRUE CONTINUOUS MODE
+  /// Internal speech recognition start - SIMPLE CONTINUOUS MODE
   Future<void> _startSpeechRecognition() async {
-    if (!_isListening || !mounted) return; // Safety check
+    if (!_isListening || !mounted) {
+      debugPrint('⚠️ Cannot start: listening=$_isListening, mounted=$mounted');
+      return;
+    }
+    
+    // Don't start if already listening
+    if (_speech.isListening) {
+      debugPrint('⚠️ Already listening, skipping restart');
+      return;
+    }
     
     try {
-      // Check if speech is available before starting
-      if (!_speech.isAvailable) {
-        debugPrint('❌ Speech not available, reinitializing...');
-        await _startListening();
-        return;
-      }
-      
+      debugPrint('🎤 Starting speech.listen()...');
       await _speech.listen(
         onResult: _handleSpeechResult,
-        listenMode: stt.ListenMode.dictation, // Changed back to dictation for better accuracy
+        listenMode: stt.ListenMode.dictation,
         partialResults: true,
         localeId: 'en_IN',
         cancelOnError: false,
-        // Longer durations to minimize restarts
-        listenFor: const Duration(seconds: 60), // 1 minute
-        pauseFor: const Duration(seconds: 10),   // 10 seconds pause allowed
+        // SIMPLE: Long session to capture everything
+        listenFor: const Duration(minutes: 10), // Very long - 10 minutes
+        pauseFor: const Duration(seconds: 30),  // Allow long pauses - 30 seconds
       );
       
-      debugPrint('✅ Speech recognition started successfully');
+      debugPrint('✅ Speech recognition started (10min session, 30sec pause tolerance)');
     } catch (e) {
       debugPrint('❌ Listen error: $e');
-      // Retry if still in listening mode
+      // Only retry if still in listening mode
       if (_isListening && mounted) {
         Future.delayed(const Duration(milliseconds: 500), () {
-          if (_isListening && mounted) _startSpeechRecognition();
+          if (_isListening && mounted && !_speech.isListening) {
+            debugPrint('🔄 Retrying after error...');
+            _startSpeechRecognition();
+          }
         });
       }
     }
@@ -269,24 +278,36 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     );
   }
 
-  /// Handle speech results - ACCUMULATE on final result
+  /// Handle speech results - SIMPLE ACCUMULATION (no auto-processing)
   void _handleSpeechResult(result) {
     if (!_isListening || !mounted) return;
 
-    setState(() {
-      _currentSpeechChunk = result.recognizedWords;
-      _audioLevel = 0.7; // Show activity
-    });
-
-    // CRITICAL: Accumulate on final result to preserve all text
-    if (result.finalResult && _currentSpeechChunk.isNotEmpty) {
+    // Always update current chunk for live display
+    if (mounted) {
       setState(() {
-        _accumulatedText += _currentSpeechChunk + ' ';
-        _currentSpeechChunk = '';
+        _currentSpeechChunk = result.recognizedWords;
+        _audioLevel = 0.7; // Show activity
       });
+    }
+
+    // SIMPLE: Accumulate on final result to preserve all text
+    if (result.finalResult && _currentSpeechChunk.isNotEmpty) {
+      // Add to accumulated text with space
+      _accumulatedText += _currentSpeechChunk + ' ';
+      
+      if (mounted) {
+        setState(() {
+          _currentSpeechChunk = '';
+        });
+      }
+      
       debugPrint('📝 Accumulated: $_accumulatedText');
-    } else {
-      debugPrint('📝 Current: $_currentSpeechChunk (final: ${result.finalResult})');
+      debugPrint('📝 Total words so far: ${_accumulatedText.split(' ').length}');
+      
+      // NO AUTO-PROCESSING - Just accumulate and keep listening
+    } else if (!result.finalResult) {
+      // Partial result - just for display
+      debugPrint('📝 Partial: $_currentSpeechChunk');
     }
   }
 
@@ -344,11 +365,11 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       if (msg != null && msg.isNotEmpty) {
         setState(() => _aiResponseText = msg);
 
-        // CRITICAL FIX: await ensures the UI doesn't refresh/interrupt while speaking
+        // Speak the response
         await _flutterTts.speak(msg);
       }
 
-      // 4. Update Bill (Only AFTER voice finishes)
+      // 4. Update Bill
       if (data['type'] == 'BILL') {
         List<dynamic> newItems = data['items'] ?? [];
         
@@ -374,10 +395,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
           billProvider.addBillItem(normalizedItem);
         }
       }
-
-      // 5. Resume Listening (Optional - makes it conversational)
-      // Uncomment the line below if you want it to auto-listen after speaking
-      // _toggleListening();
     } catch (e) {
       debugPrint("Error: $e");
       setState(() => _aiResponseText = "Server Error");
