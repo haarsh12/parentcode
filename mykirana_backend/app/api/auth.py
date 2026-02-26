@@ -34,7 +34,7 @@ def send_otp(request: OTPRequest, session: Session = Depends(get_session)):
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User already exists. Please Login."
+                detail="Login user already exist"
             )
     
     # 3. Logic for LOGIN (User wants to sign in)
@@ -42,7 +42,7 @@ def send_otp(request: OTPRequest, session: Session = Depends(get_session)):
         if not existing_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found. Please Register first."
+                detail="Create account first"
             )
 
     # 4. If check passes, Generate and Save OTP
@@ -67,7 +67,7 @@ def verify_otp(request: VerifyOTPRequest, session: Session = Depends(get_session
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Invalid or Expired OTP"
+            detail="Invalid OTP"
         )
     
     # 2. Check DB

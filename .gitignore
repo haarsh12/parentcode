@@ -87,3 +87,14 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.swp
+
+# Documentation files (may contain secrets)
+*DEPLOYMENT*.md
+*RENDER*.md
+*SETUP*.md
+*GUIDE*.md
+*CHECKLIST*.md
+*LOGS*.md
+*REFERENCE*.md
+*EXAMPLE*.md
+*TROUBLESHOOTING*.md
