@@ -157,15 +157,24 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     // Mute system beeps FIRST
     await _muteSystemSounds();
     
+    // Initialize speech if not already done
     bool available = await _speech.initialize(
       onError: (val) {
         debugPrint('🎤 STT Error: $val');
-        // Restart if still in listening mode
-        if (_isListening) {
+        // Only restart if still in listening mode and not a permission error
+        if (_isListening && !val.errorMsg.toLowerCase().contains('permission')) {
           debugPrint('🔄 Auto-restarting after error...');
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (_isListening) _startSpeechRecognition();
+            if (_isListening && mounted) _startSpeechRecognition();
           });
+        } else if (val.errorMsg.toLowerCase().contains('permission')) {
+          debugPrint('❌ Permission denied - stopping');
+          setState(() {
+            _isListening = false;
+            _aiResponseText = "Microphone permission denied";
+            _audioLevel = 0.0;
+          });
+          _unmuteSystemSounds();
         }
       },
       onStatus: (status) {
@@ -174,7 +183,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         if (_isListening && (status == 'done' || status == 'notListening')) {
           debugPrint('🔄 Auto-restarting to continue listening...');
           Future.delayed(const Duration(milliseconds: 300), () {
-            if (_isListening) _startSpeechRecognition();
+            if (_isListening && mounted) _startSpeechRecognition();
           });
         }
       },
@@ -192,30 +201,45 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       await _startSpeechRecognition();
       _startAudioLevelAnimation();
       debugPrint('🎙️ CONTINUOUS Listening started - Will auto-restart');
+    } else {
+      debugPrint('❌ Speech recognition not available');
+      setState(() {
+        _aiResponseText = "Speech recognition not available";
+      });
+      await _unmuteSystemSounds();
     }
   }
 
   /// Internal speech recognition start - TRUE CONTINUOUS MODE
   Future<void> _startSpeechRecognition() async {
-    if (!_isListening) return; // Safety check
+    if (!_isListening || !mounted) return; // Safety check
     
     try {
+      // Check if speech is available before starting
+      if (!_speech.isAvailable) {
+        debugPrint('❌ Speech not available, reinitializing...');
+        await _startListening();
+        return;
+      }
+      
       await _speech.listen(
         onResult: _handleSpeechResult,
-        listenMode: stt.ListenMode.confirmation, // More continuous than dictation
+        listenMode: stt.ListenMode.dictation, // Changed back to dictation for better accuracy
         partialResults: true,
         localeId: 'en_IN',
         cancelOnError: false,
         // Longer durations to minimize restarts
-        listenFor: const Duration(seconds: 120), // 2 minutes
-        pauseFor: const Duration(seconds: 30),   // 30 seconds pause allowed
+        listenFor: const Duration(seconds: 60), // 1 minute
+        pauseFor: const Duration(seconds: 10),   // 10 seconds pause allowed
       );
+      
+      debugPrint('✅ Speech recognition started successfully');
     } catch (e) {
       debugPrint('❌ Listen error: $e');
       // Retry if still in listening mode
-      if (_isListening) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (_isListening) _startSpeechRecognition();
+      if (_isListening && mounted) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (_isListening && mounted) _startSpeechRecognition();
         });
       }
     }
@@ -247,16 +271,17 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
 
   /// Handle speech results - ACCUMULATE on final result
   void _handleSpeechResult(result) {
-    if (!_isListening) return;
+    if (!_isListening || !mounted) return;
 
     setState(() {
       _currentSpeechChunk = result.recognizedWords;
+      _audioLevel = 0.7; // Show activity
     });
 
     // CRITICAL: Accumulate on final result to preserve all text
     if (result.finalResult && _currentSpeechChunk.isNotEmpty) {
-      _accumulatedText += _currentSpeechChunk + ' ';
       setState(() {
+        _accumulatedText += _currentSpeechChunk + ' ';
         _currentSpeechChunk = '';
       });
       debugPrint('📝 Accumulated: $_accumulatedText');
@@ -618,54 +643,109 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                   ]),
             ),
 
-            // 2. Voice Circle - Simple green pulsing
+            // 2. Voice Circle - Simple green pulsing with better feedback
             if (!_isEditMode)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Green Pulsing Circle
-                    AnimatedScale(
-                      scale: _isListening ? 1.0 + (_audioLevel * 0.2) : 1.0,
-                      duration: const Duration(milliseconds: 100),
-                      child: GestureDetector(
-                        onTap: _toggleListening,
-                        child: Container(
-                          height: 120,
-                          width: 120,
-                          decoration: BoxDecoration(
-                            color: _isListening ? AppColors.primaryGreen : Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _isListening ? Colors.transparent : Colors.grey.shade300,
-                              width: 2,
+                    // Green Pulsing Circle with ripple effect
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Outer ripple when listening
+                        if (_isListening)
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 1000),
+                            height: 160,
+                            width: 160,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.primaryGreen.withOpacity(0.3),
+                                width: 2,
+                              ),
                             ),
-                            boxShadow: [
-                              if (_isListening)
-                                BoxShadow(
-                                  color: AppColors.primaryGreen.withOpacity(0.5),
-                                  blurRadius: 30,
-                                  spreadRadius: 5,
-                                )
-                              else
-                                const BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                ),
-                            ],
                           ),
-                          child: Icon(
-                            _isListening ? Icons.graphic_eq : Icons.mic,
-                            size: 50,
-                            color: _isListening ? Colors.white : Colors.black,
+                        
+                        // Main circle
+                        AnimatedScale(
+                          scale: _isListening ? 1.0 + (_audioLevel * 0.15) : 1.0,
+                          duration: const Duration(milliseconds: 100),
+                          child: GestureDetector(
+                            onTap: _toggleListening,
+                            child: Container(
+                              height: 120,
+                              width: 120,
+                              decoration: BoxDecoration(
+                                color: _isListening ? AppColors.primaryGreen : Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _isListening ? Colors.transparent : Colors.grey.shade300,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  if (_isListening)
+                                    BoxShadow(
+                                      color: AppColors.primaryGreen.withOpacity(0.6),
+                                      blurRadius: 40,
+                                      spreadRadius: 10,
+                                    )
+                                  else
+                                    const BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                ],
+                              ),
+                              child: Icon(
+                                _isListening ? Icons.graphic_eq : Icons.mic,
+                                size: 50,
+                                color: _isListening ? Colors.white : Colors.black,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                     
                     const SizedBox(height: 15),
+                    
+                    // Status indicator
+                    if (_isListening)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryGreen.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primaryGreen,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Listening...',
+                              style: TextStyle(
+                                color: AppColors.primaryGreen,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    const SizedBox(height: 10),
                     
                     // Speech Text - SINGLE LINE with fixed height
                     SizedBox(
